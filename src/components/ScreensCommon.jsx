@@ -2,18 +2,23 @@ import React from 'react';
 import { TYPE, GlassCard, NotesMark, Waveform } from '../design-system.jsx';
 
 // ── BottomDock ───────────────────────────────────────────────────────────────
-export function BottomDock({ onAdd, onMic, onSearch, dark = false }) {
+export function BottomDock({ onAdd, onMic, onSearch, dark = false, mobile = false }) {
   return (
     <div style={{
-      position: 'absolute', bottom: 22, left: 0, right: 0,
-      display: 'flex', justifyContent: 'center', zIndex: 30, pointerEvents: 'none',
+      position: mobile ? 'relative' : 'absolute',
+      bottom: mobile ? undefined : 0,
+      left: 0, right: 0,
+      paddingBottom: mobile ? 'max(18px, var(--sab, 18px))' : '22px',
+      paddingTop: 10,
+      display: 'flex', justifyContent: 'center',
+      zIndex: 30, pointerEvents: 'none',
+      flexShrink: 0,
     }}>
       <svg width="0" height="0" style={{ position: 'absolute' }}>
         <defs>
           <filter id="goo">
             <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur" />
-            <feColorMatrix in="blur" mode="matrix"
-              values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 22 -10" result="goo" />
+            <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 22 -10" result="goo" />
             <feComposite in="SourceGraphic" in2="goo" operator="atop" />
           </filter>
         </defs>
@@ -32,7 +37,7 @@ export function BottomDock({ onAdd, onMic, onSearch, dark = false }) {
           </svg>
         </button>
 
-        <button onClick={onMic} aria-label="Voice" style={{
+        <button onClick={onMic} aria-label="Voice note" style={{
           width: 56, height: 56, borderRadius: 9999, border: 'none', cursor: 'pointer',
           marginLeft: -12,
           background: 'radial-gradient(circle at 35% 30%, #a48ce6, #6644b8)',
@@ -67,10 +72,10 @@ export function BottomDock({ onAdd, onMic, onSearch, dark = false }) {
 // ── ScreenHeader ─────────────────────────────────────────────────────────────
 export function ScreenHeader({ title, dark = false, back, menu, eyebrow, titleFont = 'display', align = 'left' }) {
   const fonts = { display: TYPE.display, serif: TYPE.serif, pixel: TYPE.pixel };
-  const titleColor = dark ? '#fff' : '#1a1322';
+  const ink = dark ? '#fff' : '#1a1322';
   return (
-    <div style={{ padding: '12px 22px 0', display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: 40 }}>
+    <div style={{ padding: '14px 20px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: 44 }}>
         {back
           ? <CircleBtn onClick={back} dark={dark}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
@@ -91,35 +96,37 @@ export function ScreenHeader({ title, dark = false, back, menu, eyebrow, titleFo
       {eyebrow && (
         <div style={{
           fontFamily: TYPE.mono, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase',
-          color: dark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)',
+          color: dark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.48)',
         }}>{eyebrow}</div>
       )}
       {title && (
         <h1 style={{
-          margin: 0, fontFamily: fonts[titleFont], fontWeight: titleFont === 'serif' ? 400 : 600,
+          margin: 0, fontFamily: fonts[titleFont] || TYPE.display,
+          fontWeight: titleFont === 'serif' ? 400 : 700,
           fontStyle: titleFont === 'serif' ? 'italic' : 'normal',
-          fontSize: titleFont === 'pixel' ? 38 : 44,
+          fontSize: titleFont === 'pixel' ? 38 : 40,
           lineHeight: 0.95, letterSpacing: titleFont === 'display' ? -1.5 : 0,
-          color: titleColor, textAlign: align,
-          textShadow: dark ? '0 2px 18px rgba(255,255,255,0.25)' : '0 2px 18px rgba(255,255,255,0.55)',
+          color: ink, textAlign: align,
+          textShadow: dark ? '0 2px 18px rgba(255,255,255,0.2)' : '0 2px 18px rgba(255,255,255,0.5)',
         }}>{title}</h1>
       )}
     </div>
   );
 }
 
-// ── CircleBtn ────────────────────────────────────────────────────────────────
+// ── CircleBtn ─────────────────────────────────────────────────────────────────
 export function CircleBtn({ children, onClick, dark = false }) {
   return (
     <button onClick={onClick} style={{
-      width: 40, height: 40, borderRadius: 9999, border: 'none', cursor: 'pointer',
+      width: 44, height: 44, borderRadius: 9999, border: 'none',
+      cursor: onClick ? 'pointer' : 'default',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: dark ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.5)',
+      background: dark ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.55)',
       backdropFilter: 'blur(14px) saturate(180%)',
       WebkitBackdropFilter: 'blur(14px) saturate(180%)',
       boxShadow: dark
         ? 'inset 0 0 0 0.5px rgba(255,255,255,0.18)'
-        : 'inset 0 0 0 0.5px rgba(255,255,255,0.85), 0 2px 8px rgba(80,60,90,0.08)',
+        : 'inset 0 0 0 0.5px rgba(255,255,255,0.85), 0 2px 8px rgba(80,60,90,0.07)',
     }}>{children}</button>
   );
 }

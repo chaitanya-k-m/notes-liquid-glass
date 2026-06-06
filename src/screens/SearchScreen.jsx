@@ -1,285 +1,172 @@
 import React from 'react';
-import { TYPE, GlassCard, NotesMark, PlaceholderImage, Waveform } from '../design-system.jsx';
+import { TYPE, GlassCard } from '../design-system.jsx';
 import { ScreenHeader } from '../components/ScreensCommon.jsx';
+import { useNotes, relativeTime, fmtDuration } from '../store/notes.jsx';
 
-export function SearchScreen({ go, dark = false, accent = '#fff36a' }) {
-  const [query, setQuery] = React.useState('');
-  const [submitted, setSubmitted] = React.useState(false);
+export function SearchScreen({ go, dark = false }) {
+  const { notes } = useNotes();
+  const [raw, setRaw]         = React.useState('');
+  const [query, setQuery]     = React.useState('');
+  const inputRef              = React.useRef(null);
 
-  const suggestions = [
-    { q: 'notes from my Lisbon trip last spring', icon: '✈' },
-    { q: 'voice memos where I mentioned Maya',    icon: '🎙' },
-    { q: 'recipes I saved in March',              icon: '🍋' },
-    { q: 'anything tagged #design with photos',   icon: '✦' },
-  ];
+  // Debounce query
+  React.useEffect(() => {
+    const t = setTimeout(() => setQuery(raw), 150);
+    return () => clearTimeout(t);
+  }, [raw]);
+
+  // Auto-focus
+  React.useEffect(() => { setTimeout(() => inputRef.current?.focus(), 200); }, []);
+
+  const results = query.trim()
+    ? notes.filter(n => {
+        const q = query.toLowerCase();
+        return n.title.toLowerCase().includes(q) || n.transcript.toLowerCase().includes(q);
+      })
+    : [];
+
+  const ink    = dark ? '#fff' : '#1a1322';
+  const subInk = dark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.45)';
+
+  function highlight(text, q) {
+    if (!q.trim()) return text;
+    const idx = text.toLowerCase().indexOf(q.toLowerCase());
+    if (idx === -1) return text;
+    return (
+      <>
+        {text.slice(0, idx)}
+        <mark style={{ background: 'rgba(255,220,60,0.45)', borderRadius: 3, padding: '0 1px', color: 'inherit' }}>
+          {text.slice(idx, idx + q.length)}
+        </mark>
+        {text.slice(idx + q.length)}
+      </>
+    );
+  }
 
   return (
-    <div style={{ position: 'relative', width: '100%' }}>
-      <ScreenHeader
-        dark={dark}
-        back={() => go('home')}
-        eyebrow="Ask in your own words"
-        title="Search"
-        titleFont="serif"
-      />
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        <ScreenHeader dark={dark} back={() => go('home')} eyebrow="Search" />
 
-      {/* Search input */}
-      <div style={{ padding: '18px 22px 12px' }}>
-        <GlassCard
-          radius={18} padding={4}
-          tint={dark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.7)'}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 12px' }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-              <circle cx="11" cy="11" r="6.5" stroke={dark ? '#fff' : '#222'} strokeWidth="2"/>
-              <path d="M16 16l4 4" stroke={dark ? '#fff' : '#222'} strokeWidth="2" strokeLinecap="round"/>
-            </svg>
+        {/* Search input */}
+        <div style={{ padding: '8px 18px 16px' }}>
+          <div style={{
+            position: 'relative', borderRadius: 18,
+            background: dark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.7)',
+            backdropFilter: 'blur(20px)',
+            border: `0.75px solid ${dark ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.85)'}`,
+            boxShadow: '0 2px 12px rgba(80,60,90,0.08)',
+            display: 'flex', alignItems: 'center',
+          }}>
+            <div style={{ padding: '0 14px', color: subInk, flexShrink: 0 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <circle cx="11" cy="11" r="6.5" stroke="currentColor" strokeWidth="2.2"/>
+                <path d="M16 16l4 4" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"/>
+              </svg>
+            </div>
             <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && setSubmitted(true)}
-              placeholder="What are you looking for?"
+              ref={inputRef}
+              value={raw}
+              onChange={e => setRaw(e.target.value)}
+              placeholder="Search notes…"
               style={{
                 flex: 1, border: 'none', outline: 'none', background: 'transparent',
-                fontFamily: TYPE.ui, fontSize: 15, color: dark ? '#fff' : '#1a1322',
-                padding: '10px 0',
+                fontFamily: TYPE.ui, fontSize: 16, color: ink, padding: '14px 0',
               }}
             />
-            <button onClick={() => go('voice')} style={{
-              width: 34, height: 34, borderRadius: 9999, border: 'none', cursor: 'pointer',
-              background: 'radial-gradient(circle at 35% 30%, #a48ce6, #6644b8)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 3px 10px rgba(90,60,180,0.35), inset 0 1px 0 rgba(255,255,255,0.3)',
-            }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                <rect x="9" y="3" width="6" height="12" rx="3" fill="#fff"/>
-                <path d="M6 11a6 6 0 0 0 12 0M12 17v4" stroke="#fff" strokeWidth="2" strokeLinecap="round"/>
-              </svg>
-            </button>
-          </div>
-        </GlassCard>
-      </div>
-
-      {!submitted && (
-        <div style={{ padding: '10px 22px 100px' }}>
-          <div style={{
-            fontFamily: TYPE.mono, fontSize: 9.5, letterSpacing: 1.6, textTransform: 'uppercase',
-            color: dark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.5)', marginBottom: 10,
-          }}>Try asking</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {suggestions.map(({ q, icon }) => (
-              <button key={q} onClick={() => { setQuery(q); setSubmitted(true); }} style={{
-                textAlign: 'left', padding: '14px 16px', borderRadius: 16,
-                border: 'none', cursor: 'pointer',
-                background: dark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.5)',
-                backdropFilter: 'blur(10px)',
-                display: 'flex', alignItems: 'center', gap: 12,
-                boxShadow: dark
-                  ? 'inset 0 0 0 0.5px rgba(255,255,255,0.1)'
-                  : 'inset 0 0 0 0.5px rgba(255,255,255,0.7)',
+            {raw && (
+              <button onClick={() => setRaw('')} style={{
+                padding: '0 14px', border: 'none', background: 'transparent', cursor: 'pointer',
+                color: subInk, display: 'flex', alignItems: 'center',
               }}>
-                <div style={{
-                  width: 26, height: 26, borderRadius: 9999, flexShrink: 0,
-                  background: 'rgba(0,0,0,0.06)', display: 'flex',
-                  alignItems: 'center', justifyContent: 'center', fontSize: 14,
-                }}>{icon}</div>
-                <div style={{
-                  fontFamily: TYPE.serif, fontStyle: 'italic', fontSize: 16,
-                  color: dark ? '#fff' : '#1a1322', lineHeight: 1.25,
-                }}>"{q}"</div>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"/>
+                </svg>
               </button>
-            ))}
+            )}
           </div>
+        </div>
 
-          <div style={{
-            marginTop: 22, padding: '12px 14px', borderRadius: 14,
-            background: dark ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.35)',
-            display: 'flex', alignItems: 'center', gap: 10,
-          }}>
-            <div style={{ fontSize: 20 }}>💡</div>
-            <div style={{
-              fontFamily: TYPE.ui, fontSize: 12, lineHeight: 1.4,
-              color: dark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)',
-            }}>
-              Search understands context — try dates, people, places, or feelings.
+        {/* Results / states */}
+        <div style={{ padding: '0 18px 100px' }}>
+          {!query.trim() && notes.length > 0 && (
+            <div>
+              <div style={{ fontFamily: TYPE.mono, fontSize: 9.5, letterSpacing: 1.5, textTransform: 'uppercase', color: subInk, marginBottom: 10 }}>
+                Recent — {notes.length} note{notes.length !== 1 ? 's' : ''}
+              </div>
+              {notes.slice(0, 6).map(n => (
+                <SearchResult key={n.id} note={n} query="" go={go} dark={dark} ink={ink} subInk={subInk} highlight={highlight} />
+              ))}
             </div>
-          </div>
-        </div>
-      )}
+          )}
 
-      {submitted && (
-        <div style={{ padding: '8px 22px 100px' }}>
-          {/* AI summary */}
-          <GlassCard
-            radius={18} padding={16}
-            tint={dark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.55)'}
-            style={{ marginBottom: 14 }}
-          >
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8,
-              fontFamily: TYPE.mono, fontSize: 9.5, letterSpacing: 1.6, textTransform: 'uppercase',
-              color: dark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.55)',
-            }}>
-              <NotesMark size={18} dark={dark} /> Summary · 3 notes
+          {query.trim() && results.length > 0 && (
+            <div>
+              <div style={{ fontFamily: TYPE.mono, fontSize: 9.5, letterSpacing: 1.5, textTransform: 'uppercase', color: subInk, marginBottom: 10 }}>
+                {results.length} result{results.length !== 1 ? 's' : ''}
+              </div>
+              {results.map(n => (
+                <SearchResult key={n.id} note={n} query={query} go={go} dark={dark} ink={ink} subInk={subInk} highlight={highlight} />
+              ))}
             </div>
-            <div style={{
-              fontFamily: TYPE.serif, fontStyle: 'italic', fontSize: 15.5, lineHeight: 1.4,
-              color: dark ? '#fff' : '#1a1322',
-            }}>
-              You took 3 notes during your Lisbon trip in March — a voice memo from a sardine spot, a written reflection from Alfama at sunset, and a photo set of azulejos from Belém.
+          )}
+
+          {query.trim() && results.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '48px 24px' }}>
+              <div style={{ fontFamily: TYPE.ui, fontWeight: 600, fontSize: 16, color: ink, marginBottom: 8 }}>No results</div>
+              <div style={{ fontFamily: TYPE.ui, fontSize: 14, color: subInk }}>Nothing matches "{query}"</div>
             </div>
-          </GlassCard>
+          )}
 
-          <div style={{
-            fontFamily: TYPE.mono, fontSize: 9.5, letterSpacing: 1.6, textTransform: 'uppercase',
-            color: dark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.5)', margin: '4px 4px 10px',
-          }}>Matches</div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <VoiceResult
-              title="Tasca down the alley"
-              duration="2:18"
-              date="18 Mar"
-              tag="LISBON"
-              snippet='The grilled sardines at that tiny <em>Lisbon</em> place — Maya kept asking about the olive oil…'
-              dark={dark}
-              onClick={() => go('detail', { kind: 'thought' })}
-            />
-            <TextResult
-              title="Notes from Alfama"
-              date="22 Mar"
-              tag="LISBON"
-              snippet='Climbed up to the miradouro at sunset. The light on the <em>Tagus</em> looked unreal.'
-              dark={dark}
-              onClick={() => go('detail', { kind: 'thought' })}
-            />
-            <PhotoResult
-              title="Tile patterns"
-              date="20 Mar"
-              tag="LISBON"
-              count={8}
-              snippet="Azulejos from Belém — palette inspiration for the studio brand."
-              dark={dark}
-              onClick={() => go('detail', { kind: 'snapshots' })}
-            />
-          </div>
+          {!query.trim() && notes.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '48px 24px' }}>
+              <div style={{ fontFamily: TYPE.ui, fontWeight: 600, fontSize: 16, color: ink, marginBottom: 8 }}>No notes yet</div>
+              <div style={{ fontFamily: TYPE.ui, fontSize: 14, color: subInk }}>Record a voice note to get started.</div>
+              <button onClick={() => go('voice')} style={{ marginTop: 20, padding: '12px 24px', borderRadius: 9999, border: 'none', cursor: 'pointer', background: dark ? 'rgba(255,255,255,0.9)' : 'rgba(30,20,50,0.88)', color: dark ? '#1a1322' : '#fff', fontFamily: TYPE.ui, fontWeight: 600, fontSize: 14 }}>
+                Start recording
+              </button>
+            </div>
+          )}
         </div>
-      )}
-    </div>
-  );
-}
-
-function VoiceResult({ title, duration, date, tag, snippet, dark, onClick }) {
-  return (
-    <GlassCard radius={18} padding={14} onClick={onClick}
-      tint={dark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.6)'}
-    >
-      <ResultHeader title={title} date={date} dark={dark} />
-      <Snippet html={snippet} dark={dark} />
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12 }}>
-        <div style={{
-          width: 30, height: 30, borderRadius: 9999, flexShrink: 0,
-          background: 'radial-gradient(circle at 35% 30%, #a48ce6, #6644b8)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          boxShadow: '0 3px 8px rgba(90,60,180,0.3)',
-        }}>
-          <svg width="10" height="10" viewBox="0 0 14 14"><polygon points="3,1 12,7 3,13" fill="#fff"/></svg>
-        </div>
-        <div style={{ flex: 1 }}>
-          <Waveform color={dark ? 'rgba(255,255,255,0.7)' : '#5d3fb0'} height={22} bars={20} />
-        </div>
-        <div style={{
-          fontFamily: TYPE.mono, fontSize: 10, letterSpacing: 0.6,
-          color: dark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.55)',
-        }}>{duration}</div>
-      </div>
-      <KindRow kind="voice" tag={tag} dark={dark} />
-    </GlassCard>
-  );
-}
-
-function TextResult({ title, date, tag, snippet, dark, onClick }) {
-  return (
-    <GlassCard radius={18} padding={14} onClick={onClick}
-      tint={dark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.6)'}
-    >
-      <ResultHeader title={title} date={date} dark={dark} />
-      <Snippet html={snippet} dark={dark} size="md" />
-      <KindRow kind="text" tag={tag} dark={dark} />
-    </GlassCard>
-  );
-}
-
-function PhotoResult({ title, date, tag, snippet, count, dark, onClick }) {
-  return (
-    <GlassCard radius={18} padding={14} onClick={onClick}
-      tint={dark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.6)'}
-    >
-      <ResultHeader title={title} date={date} dark={dark} />
-      <Snippet html={snippet} dark={dark} />
-      <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
-        {[0,1,2,3].map(i => (
-          <div key={i} style={{
-            flex: 1, height: 50, borderRadius: 8, overflow: 'hidden', position: 'relative',
-          }}>
-            <PlaceholderImage label="" bg={['#b48a6b', '#a88e75', '#c2a489', '#9e7e63'][i]} stripe="#3f2f22" />
-          </div>
-        ))}
-        <div style={{
-          width: 50, height: 50, borderRadius: 8,
-          background: dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontFamily: TYPE.mono, fontSize: 11, fontWeight: 700,
-          color: dark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)',
-        }}>+{count - 4}</div>
-      </div>
-      <KindRow kind="photos" tag={tag} dark={dark} />
-    </GlassCard>
-  );
-}
-
-function ResultHeader({ title, date, dark }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-      <div style={{ fontFamily: TYPE.ui, fontWeight: 600, fontSize: 14.5, color: dark ? '#fff' : '#1a1322' }}>
-        {title}
-      </div>
-      <div style={{ fontFamily: TYPE.mono, fontSize: 9.5, letterSpacing: 0.8, color: dark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.5)' }}>
-        {date}
       </div>
     </div>
   );
 }
 
-function Snippet({ html, dark, size = 'sm' }) {
-  return (
-    <div style={{
-      fontFamily: TYPE.ui, fontSize: size === 'md' ? 13.5 : 12.5, lineHeight: 1.5, marginTop: 4,
-      color: dark ? 'rgba(255,255,255,0.78)' : 'rgba(0,0,0,0.7)',
-    }} dangerouslySetInnerHTML={{
-      __html: html.replace(/<em>/g, '<em style="font-style:normal;background:rgba(255,210,120,0.55);padding:0 3px;border-radius:3px;color:#000;">'),
-    }} />
-  );
-}
+function SearchResult({ note, query, go, dark, ink, subInk, highlight }) {
+  const tint = dark ? 'rgba(255,255,255,0.09)' : 'rgba(255,255,255,0.62)';
+  const excerpt = note.transcript
+    ? (() => {
+        if (!query.trim()) return note.transcript.slice(0, 80);
+        const idx = note.transcript.toLowerCase().indexOf(query.toLowerCase());
+        if (idx === -1) return note.transcript.slice(0, 80);
+        const start = Math.max(0, idx - 30);
+        return (start > 0 ? '…' : '') + note.transcript.slice(start, idx + query.length + 50);
+      })()
+    : '';
 
-function KindRow({ kind, tag, dark }) {
-  const map = {
-    voice:  { bg: 'rgba(150,120,210,0.85)', label: 'voice'  },
-    text:   { bg: 'rgba(80,140,210,0.85)',  label: 'text'   },
-    photos: { bg: 'rgba(220,140,90,0.85)',  label: 'photos' },
-  };
-  const s = map[kind] || map.text;
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
-      <div style={{
-        padding: '3px 9px', borderRadius: 9999,
-        fontFamily: TYPE.mono, fontSize: 9, fontWeight: 700, letterSpacing: 0.8,
-        textTransform: 'uppercase', color: '#fff', background: s.bg,
-      }}>{s.label}</div>
-      <div style={{
-        fontFamily: TYPE.mono, fontSize: 9.5, letterSpacing: 0.8,
-        color: dark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.5)', textTransform: 'uppercase',
-      }}>{tag}</div>
-    </div>
+    <GlassCard
+      radius={18} padding={14} tint={tint}
+      style={{ marginBottom: 8, cursor: 'pointer' }}
+      onClick={() => go('detail', { noteId: note.id })}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontFamily: TYPE.ui, fontWeight: 600, fontSize: 15, color: ink, marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {highlight(note.title, query)}
+          </div>
+          {excerpt && (
+            <div style={{ fontFamily: TYPE.ui, fontSize: 13, lineHeight: 1.5, color: subInk, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+              {highlight(excerpt, query)}
+            </div>
+          )}
+        </div>
+        <div style={{ fontFamily: TYPE.mono, fontSize: 9, letterSpacing: 0.6, color: subInk, whiteSpace: 'nowrap', flexShrink: 0, paddingTop: 2 }}>
+          {relativeTime(note.createdAt)}
+          {note.duration > 0 && <span style={{ display: 'block' }}>{fmtDuration(note.duration)}</span>}
+        </div>
+      </div>
+    </GlassCard>
   );
 }
