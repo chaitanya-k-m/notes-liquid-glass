@@ -1,50 +1,84 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import { deleteAudio } from './audioDB.js';
 
 const Ctx = createContext(null);
+const STORAGE_KEY = 'notes_v2';
 
 function reducer(state, action) {
   switch (action.type) {
     case 'ADD':    return [action.note, ...state];
-    case 'UPDATE': return state.map(n => n.id === action.id ? { ...n, ...action.updates } : n);
+    case 'UPDATE': return state.map(n => n.id === action.id ? { ...n, ...action.updates, updatedAt: new Date().toISOString() } : n);
     case 'DELETE': return state.filter(n => n.id !== action.id);
     default: return state;
   }
 }
 
-function makeTitle(transcript) {
-  if (!transcript?.trim()) {
-    return new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+export function makeTitle(text) {
+  if (!text?.trim()) {
+    return 'Untitled note';
   }
-  const first = transcript.trim().split(/[.!?\n]/)[0].trim();
+  const first = text.trim().split(/[.!?\n]/)[0].trim();
   if (first.length <= 52) return first;
-  return first.split(' ').slice(0, 7).join(' ') + '…';
+  return first.split(' ').slice(0, 8).join(' ') + '…';
+}
+
+function uuid() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+  return 'n_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
+// Load + migrate from any older shape (notes_v1 used `transcript`)
+function loadInitial() {
+  try {
+    const v2 = localStorage.getItem(STORAGE_KEY);
+    if (v2) return JSON.parse(v2);
+  } catch { /* fall through */ }
+  try {
+    const v1 = JSON.parse(localStorage.getItem('notes_v1') || '[]');
+    return v1.map(n => ({
+      id: n.id || uuid(),
+      kind: n.kind || (n.duration ? 'voice' : 'text'),
+      title: n.title || makeTitle(n.text ?? n.transcript ?? ''),
+      text: n.text ?? n.transcript ?? '',
+      duration: n.duration || 0,
+      hasAudio: false, // v1 never stored audio
+      tags: n.tags || [],
+      createdAt: n.createdAt || new Date().toISOString(),
+      updatedAt: n.updatedAt || n.createdAt || new Date().toISOString(),
+    }));
+  } catch { return []; }
 }
 
 export function NotesProvider({ children }) {
-  const [notes, dispatch] = useReducer(reducer, [], () => {
-    try { return JSON.parse(localStorage.getItem('notes_v1') || '[]'); }
-    catch { return []; }
-  });
+  const [notes, dispatch] = useReducer(reducer, undefined, loadInitial);
 
   useEffect(() => {
-    localStorage.setItem('notes_v1', JSON.stringify(notes));
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(notes)); } catch { /* quota */ }
   }, [notes]);
 
-  const addNote = (fields) => {
+  const addNote = (fields = {}) => {
+    const now = new Date().toISOString();
     const note = {
-      id: crypto.randomUUID(),
-      title: makeTitle(fields.transcript),
-      transcript: fields.transcript || '',
+      id: uuid(),
+      kind: fields.kind || 'text',
+      title: (fields.title && fields.title.trim()) || makeTitle(fields.text),
+      text: fields.text || '',
       duration: fields.duration || 0,
+      hasAudio: !!fields.hasAudio,
       tags: fields.tags || [],
-      createdAt: new Date().toISOString(),
+      createdAt: now,
+      updatedAt: now,
     };
     dispatch({ type: 'ADD', note });
     return note;
   };
 
   const updateNote = (id, updates) => dispatch({ type: 'UPDATE', id, updates });
-  const deleteNote = (id) => dispatch({ type: 'DELETE', id });
+
+  const deleteNote = (id) => {
+    deleteAudio(id);          // clean up any stored audio
+    dispatch({ type: 'DELETE', id });
+  };
 
   return (
     <Ctx.Provider value={{ notes, addNote, updateNote, deleteNote }}>
@@ -68,5 +102,5 @@ export function relativeTime(iso) {
 export function fmtDuration(s) {
   if (!s) return '';
   const m = Math.floor(s / 60), sec = s % 60;
-  return m > 0 ? `${m}m ${sec}s` : `${sec}s`;
+  return m > 0 ? `${m}:${String(sec).padStart(2, '0')}` : `0:${String(sec).padStart(2, '0')}`;
 }

@@ -12,7 +12,7 @@ export function HomeScreen({ go, dark = false, accent = '#fff36a', mono = false,
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
   const filtered = notes.filter(n => {
-    if (tab === 'Voice') return n.duration > 0;
+    if (tab === 'Voice') return n.kind === 'voice';
     if (tab === 'Recent') return (Date.now() - new Date(n.createdAt)) < 86400000;
     return true;
   });
@@ -40,7 +40,7 @@ export function HomeScreen({ go, dark = false, accent = '#fff36a', mono = false,
         </div>
 
         {filtered.length === 0 ? (
-          <EmptyState dark={dark} tab={tab} onRecord={() => go('voice')} />
+          <EmptyState dark={dark} tab={tab} onRecord={() => go('voice')} onWrite={() => go('detail', { draft: true })} />
         ) : (
           <NotesList notes={filtered} go={go} dark={dark} ink={ink} subInk={subInk} />
         )}
@@ -52,7 +52,7 @@ export function HomeScreen({ go, dark = false, accent = '#fff36a', mono = false,
       {/* Bottom dock — sticky at bottom, respects home indicator */}
       <BottomDock
         dark={dark}
-        onAdd={() => go('voice')}
+        onAdd={() => go('detail', { draft: true })}
         onMic={() => go('voice')}
         onSearch={() => go('search')}
         mobile={mobile}
@@ -62,7 +62,7 @@ export function HomeScreen({ go, dark = false, accent = '#fff36a', mono = false,
 }
 
 // ── Empty state ───────────────────────────────────────────────────────────────
-function EmptyState({ dark, tab, onRecord }) {
+function EmptyState({ dark, tab, onRecord, onWrite }) {
   const ink = dark ? '#fff' : '#1a1322';
   const sub = dark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.45)';
   return (
@@ -98,13 +98,21 @@ function EmptyState({ dark, tab, onRecord }) {
         {tab === 'All' ? 'Tap the mic and speak your first thought. It\'ll appear here instantly.' : 'Record a voice note and it\'ll show up here.'}
       </div>
 
-      <button onClick={onRecord} style={{
-        marginTop: 28, padding: '14px 28px', borderRadius: 9999, border: 'none', cursor: 'pointer',
-        background: dark ? 'rgba(255,255,255,0.9)' : 'rgba(30,20,50,0.88)',
-        color: dark ? '#1a1322' : '#fff',
-        fontFamily: TYPE.ui, fontWeight: 600, fontSize: 15,
-        boxShadow: '0 6px 18px rgba(80,60,100,0.25)',
-      }}>Start recording</button>
+      <div style={{ display: 'flex', gap: 10, marginTop: 28 }}>
+        <button onClick={onRecord} style={{
+          padding: '14px 24px', borderRadius: 9999, border: 'none', cursor: 'pointer',
+          background: dark ? 'rgba(255,255,255,0.9)' : 'rgba(30,20,50,0.88)',
+          color: dark ? '#1a1322' : '#fff',
+          fontFamily: TYPE.ui, fontWeight: 600, fontSize: 15,
+          boxShadow: '0 6px 18px rgba(80,60,100,0.25)',
+        }}>Record</button>
+        <button onClick={onWrite} style={{
+          padding: '14px 24px', borderRadius: 9999, cursor: 'pointer',
+          border: `1px solid ${dark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.15)'}`,
+          background: 'transparent', color: ink,
+          fontFamily: TYPE.ui, fontWeight: 600, fontSize: 15,
+        }}>Write</button>
+      </div>
       <style>{`@keyframes emptyPulse { 0%,100%{transform:scale(0.9);opacity:0.6} 50%{transform:scale(1.15);opacity:1} }`}</style>
     </div>
   );
@@ -134,9 +142,10 @@ function NotesList({ notes, go, dark, ink, subInk }) {
 // ── Single note card ──────────────────────────────────────────────────────────
 function NoteCard({ note, go, dark, ink, subInk, size = 'small' }) {
   const isHero = size === 'hero';
-  const preview = note.transcript
-    ? note.transcript.slice(0, isHero ? 120 : 60) + (note.transcript.length > (isHero ? 120 : 60) ? '…' : '')
-    : '';
+  const isVoice = note.kind === 'voice';
+  const preview = note.text
+    ? note.text.slice(0, isHero ? 120 : 60) + (note.text.length > (isHero ? 120 : 60) ? '…' : '')
+    : (isVoice ? 'Voice recording' : '');
 
   const tint = dark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.6)';
 
@@ -151,7 +160,7 @@ function NoteCard({ note, go, dark, ink, subInk, size = 'small' }) {
       {/* Meta row */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          {note.duration > 0 && (
+          {isVoice && (
             <div style={{
               width: 18, height: 18, borderRadius: 4,
               background: dark ? 'rgba(164,140,230,0.35)' : 'rgba(164,140,230,0.25)',

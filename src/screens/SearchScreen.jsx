@@ -21,7 +21,7 @@ export function SearchScreen({ go, dark = false }) {
   const results = query.trim()
     ? notes.filter(n => {
         const q = query.toLowerCase();
-        return n.title.toLowerCase().includes(q) || n.transcript.toLowerCase().includes(q);
+        return n.title.toLowerCase().includes(q) || n.text.toLowerCase().includes(q);
       })
     : [];
 
@@ -135,13 +135,13 @@ export function SearchScreen({ go, dark = false }) {
 
 function SearchResult({ note, query, go, dark, ink, subInk, highlight }) {
   const tint = dark ? 'rgba(255,255,255,0.09)' : 'rgba(255,255,255,0.62)';
-  const excerpt = note.transcript
+  const excerpt = note.text
     ? (() => {
-        if (!query.trim()) return note.transcript.slice(0, 80);
-        const idx = note.transcript.toLowerCase().indexOf(query.toLowerCase());
-        if (idx === -1) return note.transcript.slice(0, 80);
+        if (!query.trim()) return note.text.slice(0, 80);
+        const idx = note.text.toLowerCase().indexOf(query.toLowerCase());
+        if (idx === -1) return note.text.slice(0, 80);
         const start = Math.max(0, idx - 30);
-        return (start > 0 ? '…' : '') + note.transcript.slice(start, idx + query.length + 50);
+        return (start > 0 ? '…' : '') + note.text.slice(start, idx + query.length + 50);
       })()
     : '';
 
