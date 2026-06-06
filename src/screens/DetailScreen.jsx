@@ -17,7 +17,7 @@ export function DetailScreen({ go, dark = false, payload }) {
   // No note found — could be deleted or navigated directly
   if (!note) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
         <ScreenHeader dark={dark} back={() => go('home')} title="" eyebrow="Note not found" />
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 32px', textAlign: 'center' }}>
           <div style={{ fontSize: 40, marginBottom: 16 }}>📝</div>
@@ -43,7 +43,7 @@ export function DetailScreen({ go, dark = false, payload }) {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
       {/* Scrollable content */}
       <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
         <ScreenHeader dark={dark} back={() => go('home')} eyebrow="Note" />

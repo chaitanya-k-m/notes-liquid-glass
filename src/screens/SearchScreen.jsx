@@ -44,7 +44,7 @@ export function SearchScreen({ go, dark = false }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
       <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
         <ScreenHeader dark={dark} back={() => go('home')} eyebrow="Search" />
 
