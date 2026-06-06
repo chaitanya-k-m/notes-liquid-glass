@@ -22,10 +22,18 @@ const PRESETS = {
   midnight:  { palette: 'midnight', accent: '#e6c8ff', titleFont: 'display', showGrain: true,  monochrome: false },
 };
 
-const isMobileDevice = () =>
-  /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
-  window.matchMedia('(display-mode: standalone)').matches ||
-  window.innerWidth <= 540;
+const isMobileDevice = () => {
+  try {
+    return (
+      /Android|iPhone|iPad|iPod|Mobile|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+      window.matchMedia?.('(display-mode: standalone)').matches ||
+      window.matchMedia?.('(pointer: coarse)').matches ||   // touch-primary device
+      window.innerWidth < 900
+    );
+  } catch {
+    return window.innerWidth < 900;
+  }
+};
 
 const SCREENS = { home: HomeScreen, detail: DetailScreen, voice: VoiceScreen, search: SearchScreen, paywall: PaywallScreen };
 
@@ -74,9 +82,10 @@ export default function App() {
             <GradientBg palette={paletteKey} grain={t.showGrain} style={{ position: 'absolute', inset: 0 }} />
             <div style={{
               position: 'absolute', inset: 0,
+              zIndex: 10,
               paddingTop: 'var(--sat)',
-              overflow: 'hidden',
               display: 'flex', flexDirection: 'column',
+              overflow: 'hidden',
             }}>
               {screenNode}
             </div>

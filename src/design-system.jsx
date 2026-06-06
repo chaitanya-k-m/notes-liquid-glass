@@ -32,6 +32,7 @@ export function GradientBg({ palette = 'sunset', children, style, grain = true }
       position: 'absolute', inset: 0,
       background: gradientCSS(stops),
       overflow: 'hidden',
+      pointerEvents: 'none',   // purely decorative — never intercept clicks
       ...style,
     }}>
       <div style={{
@@ -41,6 +42,7 @@ export function GradientBg({ palette = 'sunset', children, style, grain = true }
           ? 'radial-gradient(circle, rgba(140,100,200,0.5), transparent 70%)'
           : 'radial-gradient(circle, rgba(255,180,140,0.55), transparent 70%)',
         filter: 'blur(40px)',
+        pointerEvents: 'none',
       }} />
       <div style={{
         position: 'absolute', bottom: '-10%', left: '-25%',
@@ -49,6 +51,7 @@ export function GradientBg({ palette = 'sunset', children, style, grain = true }
           ? 'radial-gradient(circle, rgba(80,120,200,0.4), transparent 70%)'
           : 'radial-gradient(circle, rgba(180,200,255,0.5), transparent 70%)',
         filter: 'blur(60px)',
+        pointerEvents: 'none',
       }} />
       <div style={{
         position: 'absolute', top: '30%', left: '20%',
@@ -57,6 +60,7 @@ export function GradientBg({ palette = 'sunset', children, style, grain = true }
           ? 'radial-gradient(circle, rgba(200,150,220,0.25), transparent 70%)'
           : 'radial-gradient(circle, rgba(250,220,200,0.45), transparent 70%)',
         filter: 'blur(50px)',
+        pointerEvents: 'none',
       }} />
       {grain && (
         <div style={{
@@ -94,6 +98,7 @@ export function GlassCard({
         backdropFilter: `blur(${blur}px) saturate(160%)`,
         WebkitBackdropFilter: `blur(${blur}px) saturate(160%)`,
         background: resolvedTint,
+        pointerEvents: 'none',
       }} />
       <div style={{
         position: 'absolute', inset: 0, borderRadius: radius, pointerEvents: 'none',
