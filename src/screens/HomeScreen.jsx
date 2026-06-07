@@ -1,10 +1,32 @@
 import React from 'react';
-import { TYPE, GlassCard, SoftPill, Waveform } from '../design-system.jsx';
+import { TYPE, SoftPill, Waveform } from '../design-system.jsx';
 import { ScreenHeader, BottomDock, Thumb } from '../components/ScreensCommon.jsx';
 import { useNotes, relativeTime, fmtDuration } from '../store/notes.jsx';
 import { useTheme } from '../store/theme.jsx';
 
 const TABS = ['All', 'Notes', 'Voice', 'To-Do', 'Photos'];
+const KIND_LABEL = { text: 'Note', voice: 'Voice memo', todo: 'Checklist', photo: 'Photos' };
+
+const fmtDate = (iso) => {
+  const d = new Date(iso);
+  return `${String(d.getDate()).padStart(2, '0')} / ${String(d.getMonth() + 1).padStart(2, '0')} / ${String(d.getFullYear()).slice(2)}`;
+};
+
+const STRIPES = 'repeating-linear-gradient(135deg, rgba(0,0,0,0.035) 0 9px, transparent 9px 18px)';
+
+// Soft per-kind tints (work over the themed gradient backdrop)
+function tintFor(kind, dark) {
+  if (dark) return {
+    text:  'rgba(255,236,214,0.10)',
+    todo:  'rgba(205,232,212,0.10)',
+    photo: 'rgba(255,255,255,0.08)',
+  }[kind] || 'rgba(255,255,255,0.08)';
+  return {
+    text:  'rgba(253,228,205,0.62)',
+    todo:  'rgba(214,234,216,0.62)',
+    photo: 'rgba(255,255,255,0.5)',
+  }[kind] || 'rgba(255,255,255,0.55)';
+}
 
 export function HomeScreen({ go, openNew }) {
   const { notes } = useNotes();
@@ -47,132 +69,196 @@ export function HomeScreen({ go, openNew }) {
 function Bento({ notes, go, dark, ink, subInk, accent }) {
   const [hero, ...rest] = notes;
   return (
-    <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <NoteCard note={hero} go={go} dark={dark} ink={ink} subInk={subInk} accent={accent} hero />
+    <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <Hero note={hero} go={go} dark={dark} ink={ink} subInk={subInk} accent={accent} />
       {rest.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, alignItems: 'start' }}>
-          {rest.map(n => <NoteCard key={n.id} note={n} go={go} dark={dark} ink={ink} subInk={subInk} accent={accent} />)}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, alignItems: 'start' }}>
+          {rest.map(n => <Card key={n.id} note={n} go={go} dark={dark} ink={ink} subInk={subInk} accent={accent} />)}
         </div>
       )}
     </div>
   );
 }
 
-function NoteCard({ note, go, dark, ink, subInk, accent, hero = false }) {
-  const isPhoto = (note.kind === 'photo' || (note.photos && note.photos.length > 0)) && note.photos?.length > 0;
-  if (isPhoto) return <ImageCard note={note} go={go} hero={hero} subInk={subInk} />;
-
-  const tint = dark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.6)';
+// Glass shell with optional colored tint + stripe texture
+function Shell({ children, onClick, tint, radius = 24, pad = 18, dark, stripes = false, style = {} }) {
   return (
-    <GlassCard radius={hero ? 26 : 20} padding={hero ? 18 : 14} tint={tint} style={{ cursor: 'pointer' }} onClick={() => go('detail', { noteId: note.id })}>
-      <MetaRow note={note} dark={dark} subInk={subInk} />
-      <div style={{ fontFamily: TYPE.ui, fontWeight: 600, fontSize: hero ? 17 : 14, lineHeight: 1.3, color: ink, margin: '6px 0', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-        {note.title || 'Untitled'}
-      </div>
-      <KindBody note={note} hero={hero} dark={dark} ink={ink} subInk={subInk} accent={accent} />
-    </GlassCard>
-  );
-}
-
-// ── Image-forward photo card ──────────────────────────────────────────────────
-function ImageCard({ note, go, hero, subInk }) {
-  const count = note.photos.length;
-  return (
-    <div onClick={() => go('detail', { noteId: note.id })} style={{
-      position: 'relative', borderRadius: hero ? 26 : 20, overflow: 'hidden', cursor: 'pointer',
-      height: hero ? 230 : 168,
-      boxShadow: '0 1px 0 rgba(255,255,255,0.4) inset, 0 10px 28px rgba(60,40,80,0.18)',
+    <div onClick={onClick} style={{
+      position: 'relative', borderRadius: radius, overflow: 'hidden', cursor: 'pointer',
+      boxShadow: dark ? '0 8px 24px rgba(0,0,0,0.3)' : '0 1px 0 rgba(255,255,255,0.6) inset, 0 10px 26px rgba(80,60,90,0.13)',
+      ...style,
     }}>
-      <Thumb id={note.photos[0]} radius={0} style={{ position: 'absolute', inset: 0 }} />
-      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.62) 0%, rgba(0,0,0,0.1) 45%, rgba(0,0,0,0.05) 100%)' }} />
-      {count > 1 && (
-        <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', alignItems: 'center', gap: 4, padding: '4px 9px', borderRadius: 9999, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(8px)' }}>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="18" height="14" rx="2" stroke="#fff" strokeWidth="2"/><circle cx="12" cy="13" r="2.6" stroke="#fff" strokeWidth="2"/></svg>
-          <span style={{ fontFamily: TYPE.mono, fontSize: 10, color: '#fff', fontWeight: 600 }}>{count}</span>
-        </div>
-      )}
-      <div style={{ position: 'absolute', left: 14, right: 14, bottom: 12 }}>
-        <div style={{ fontFamily: TYPE.mono, fontSize: 9, letterSpacing: 1, textTransform: 'uppercase', color: 'rgba(255,255,255,0.8)', marginBottom: 4 }}>{relativeTime(note.createdAt)}</div>
-        <div style={{ fontFamily: TYPE.display, fontWeight: 700, fontSize: hero ? 20 : 15, lineHeight: 1.15, color: '#fff', letterSpacing: -0.4, textShadow: '0 1px 8px rgba(0,0,0,0.4)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-          {note.title || 'Photos'}
-        </div>
-      </div>
+      <div style={{ position: 'absolute', inset: 0, background: tint, backdropFilter: 'blur(20px) saturate(160%)', WebkitBackdropFilter: 'blur(20px) saturate(160%)', pointerEvents: 'none' }} />
+      {stripes && <div style={{ position: 'absolute', inset: 0, background: STRIPES, pointerEvents: 'none' }} />}
+      <div style={{ position: 'absolute', inset: 0, borderRadius: radius, border: `0.75px solid ${dark ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.7)'}`, pointerEvents: 'none' }} />
+      <div style={{ position: 'relative', padding: pad }}>{children}</div>
     </div>
   );
 }
 
-function MetaRow({ note, dark, subInk }) {
-  const badge = {
-    voice: { c: '#7755cc', bg: dark ? 'rgba(164,140,230,0.35)' : 'rgba(164,140,230,0.25)' },
-    todo:  { c: '#2c8a68', bg: dark ? 'rgba(110,196,160,0.3)' : 'rgba(110,196,160,0.22)' },
-    photo: { c: '#2a6fbf', bg: dark ? 'rgba(91,155,230,0.3)' : 'rgba(91,155,230,0.2)' },
-    text:  null,
-  }[note.kind];
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        {badge && <div style={{ width: 18, height: 18, borderRadius: 5, background: badge.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><KindIcon kind={note.kind} color={dark ? '#fff' : badge.c} /></div>}
-        <span style={{ fontFamily: TYPE.mono, fontSize: 9.5, letterSpacing: 0.8, color: subInk, textTransform: 'uppercase' }}>
-          {relativeTime(note.createdAt)}{note.duration > 0 ? ` · ${fmtDuration(note.duration)}` : ''}
-        </span>
-      </div>
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style={{ opacity: 0.3 }}><path d="M9 6l6 6-6 6" stroke={dark ? '#fff' : '#222'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-    </div>
-  );
-}
+const Eyebrow = ({ children, color }) => (
+  <span style={{ fontFamily: TYPE.mono, fontSize: 9.5, letterSpacing: 2, textTransform: 'uppercase', color }}>{children}</span>
+);
 
-function KindBody({ note, hero, dark, ink, subInk, accent }) {
-  if (note.kind === 'todo') {
-    const items = note.items || [];
-    const done = items.filter(i => i.done).length;
-    const pct = items.length ? (done / items.length) * 100 : 0;
+const ArrowBtn = ({ light }) => (
+  <div style={{ width: 30, height: 30, borderRadius: 15, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: light ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.06)', backdropFilter: 'blur(8px)' }}>
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke={light ? '#fff' : '#1a1322'} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+  </div>
+);
+
+// ── HERO — editorial treatment of the latest note ─────────────────────────────
+function Hero({ note, go, dark, ink, subInk, accent }) {
+  const open = () => go('detail', { noteId: note.id });
+  const isPhoto = note.photos?.length > 0;
+  const date = fmtDate(note.createdAt);
+
+  // Photo hero — image with scrim, serif title
+  if (isPhoto) {
     return (
-      <div>
-        {items.length > 0 && (
-          <div style={{ height: 5, borderRadius: 3, background: dark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.08)', overflow: 'hidden', marginBottom: 10 }}>
-            <div style={{ width: `${pct}%`, height: '100%', background: accent, borderRadius: 3, transition: 'width 0.3s' }} />
-          </div>
-        )}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {items.slice(0, hero ? 4 : 3).map(it => (
-            <div key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ width: 15, height: 15, borderRadius: 5, flexShrink: 0, border: `1.5px solid ${it.done ? accent : (dark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.28)')}`, background: it.done ? accent : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {it.done && <svg width="9" height="9" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-              </span>
-              <span style={{ fontFamily: TYPE.ui, fontSize: 12.5, color: it.done ? subInk : ink, textDecoration: it.done ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.text || 'Item'}</span>
-            </div>
-          ))}
-          {items.length === 0 && <span style={{ fontFamily: TYPE.ui, fontSize: 12.5, color: subInk, fontStyle: 'italic' }}>Empty checklist</span>}
+      <div onClick={open} style={{ position: 'relative', borderRadius: 28, overflow: 'hidden', cursor: 'pointer', height: 234, boxShadow: '0 10px 28px rgba(60,40,80,0.2)' }}>
+        <Thumb id={note.photos[0]} radius={0} style={{ position: 'absolute', inset: 0 }} />
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.66) 0%, rgba(0,0,0,0.12) 50%, rgba(0,0,0,0.18) 100%)' }} />
+        <div style={{ position: 'absolute', top: 16, left: 18, right: 18, display: 'flex', justifyContent: 'space-between' }}>
+          <Eyebrow color="rgba(255,255,255,0.85)">Photos</Eyebrow>
+          <Eyebrow color="rgba(255,255,255,0.75)">{date}</Eyebrow>
         </div>
-        {items.length > 0 && <span style={{ display: 'inline-block', marginTop: 8, fontFamily: TYPE.mono, fontSize: 9, letterSpacing: 0.8, color: subInk }}>{done} of {items.length} done</span>}
+        <div style={{ position: 'absolute', left: 18, right: 18, bottom: 16 }}>
+          <h2 style={{ margin: 0, fontFamily: TYPE.serif, fontStyle: 'italic', fontWeight: 400, fontSize: 30, lineHeight: 1.05, color: '#fff', textShadow: '0 2px 12px rgba(0,0,0,0.4)' }}>{note.title || 'Photos'}</h2>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
+            <Eyebrow color="rgba(255,255,255,0.8)">{note.photos.length} photo{note.photos.length !== 1 ? 's' : ''} · {relativeTime(note.createdAt)}</Eyebrow>
+            <ArrowBtn light />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Voice hero — purple gradient memo
+  if (note.kind === 'voice') {
+    return (
+      <div onClick={open} style={{ position: 'relative', borderRadius: 28, overflow: 'hidden', cursor: 'pointer', padding: 20, background: 'linear-gradient(150deg, #b79bef 0%, #8d6fd6 60%, #7a5ec8 100%)', boxShadow: '0 10px 28px rgba(110,80,200,0.35)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+          <Eyebrow color="rgba(255,255,255,0.85)">Voice memo</Eyebrow>
+          <Eyebrow color="rgba(255,255,255,0.75)">{date}</Eyebrow>
+        </div>
+        <h2 style={{ margin: 0, fontFamily: TYPE.serif, fontStyle: 'italic', fontWeight: 400, fontSize: 28, lineHeight: 1.1, color: '#fff' }}>{note.title || 'Voice note'}</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 16 }}>
+          <div style={{ width: 44, height: 44, borderRadius: 22, background: 'rgba(255,255,255,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="#6644b8" style={{ marginLeft: 2 }}><path d="M8 5v14l11-7z"/></svg>
+          </div>
+          <Waveform color="#fff" bars={26} height={30} />
+        </div>
+        <div style={{ marginTop: 12 }}><Eyebrow color="rgba(255,255,255,0.85)">Memo · {fmtDuration(note.duration) || '0:00'}</Eyebrow></div>
+      </div>
+    );
+  }
+
+  // Todo / text hero — warm editorial card
+  const tint = tintFor(note.kind === 'todo' ? 'todo' : 'text', dark);
+  return (
+    <Shell onClick={open} tint={tint} dark={dark} radius={28} pad={20} stripes style={{ minHeight: 180 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14 }}>
+        <Eyebrow color={subInk}>{note.kind === 'todo' ? 'Checklist' : "Today’s note"}</Eyebrow>
+        <Eyebrow color={subInk}>{date}</Eyebrow>
+      </div>
+      <h2 style={{ margin: 0, fontFamily: note.kind === 'todo' ? TYPE.pixel : TYPE.serif, fontStyle: note.kind === 'todo' ? 'normal' : 'italic', fontWeight: 400, fontSize: note.kind === 'todo' ? 38 : 30, lineHeight: note.kind === 'todo' ? 0.9 : 1.08, letterSpacing: note.kind === 'todo' ? 0.5 : 0, color: ink, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+        {note.title || (note.kind === 'todo' ? 'Checklist' : 'Untitled')}
+      </h2>
+      {note.kind === 'todo'
+        ? <TodoMini note={note} dark={dark} ink={ink} subInk={subInk} accent={accent} large />
+        : (note.text ? <p style={{ margin: '12px 0 0', fontFamily: TYPE.ui, fontSize: 14, lineHeight: 1.55, color: subInk, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{note.text}</p> : null)}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 14 }}>
+        <Eyebrow color={subInk}>{relativeTime(note.createdAt)}</Eyebrow>
+        <ArrowBtn />
+      </div>
+    </Shell>
+  );
+}
+
+// ── GRID CARDS ────────────────────────────────────────────────────────────────
+function Card({ note, go, dark, ink, subInk, accent }) {
+  const open = () => go('detail', { noteId: note.id });
+
+  if (note.photos?.length > 0) {
+    return (
+      <div onClick={open} style={{ position: 'relative', borderRadius: 22, overflow: 'hidden', cursor: 'pointer', height: 172, boxShadow: '0 8px 22px rgba(60,40,80,0.16)' }}>
+        <Thumb id={note.photos[0]} radius={0} style={{ position: 'absolute', inset: 0 }} />
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.05) 55%)' }} />
+        {note.photos.length > 1 && (
+          <div style={{ position: 'absolute', top: 9, right: 9, padding: '3px 8px', borderRadius: 9999, background: 'rgba(0,0,0,0.45)', fontFamily: TYPE.mono, fontSize: 9.5, color: '#fff', fontWeight: 600 }}>{note.photos.length}</div>
+        )}
+        <div style={{ position: 'absolute', left: 12, right: 12, bottom: 11 }}>
+          <Eyebrow color="rgba(255,255,255,0.8)">{relativeTime(note.createdAt)}</Eyebrow>
+          <div style={{ fontFamily: TYPE.serif, fontStyle: 'italic', fontSize: 17, color: '#fff', lineHeight: 1.1, marginTop: 2, textShadow: '0 1px 8px rgba(0,0,0,0.4)' }}>{note.title || 'Photos'}</div>
+        </div>
       </div>
     );
   }
 
   if (note.kind === 'voice') {
     return (
-      <div>
-        <div style={{ opacity: 0.75, marginBottom: note.text ? 8 : 0 }}>
-          <Waveform color={dark ? '#fff' : '#5a4a6a'} bars={hero ? 30 : 18} height={hero ? 28 : 20} />
+      <div onClick={open} style={{ position: 'relative', borderRadius: 22, overflow: 'hidden', cursor: 'pointer', padding: 16, background: 'linear-gradient(150deg, #b79bef, #8d6fd6)', boxShadow: '0 8px 22px rgba(110,80,200,0.3)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 17, background: 'rgba(255,255,255,0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="#6644b8" style={{ marginLeft: 2 }}><path d="M8 5v14l11-7z"/></svg>
+          </div>
+          <Waveform color="#fff" bars={14} height={22} />
         </div>
-        {note.text
-          ? <div style={{ fontFamily: TYPE.ui, fontSize: hero ? 13.5 : 12, lineHeight: 1.5, color: subInk, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{note.text}</div>
-          : <span style={{ fontFamily: TYPE.ui, fontSize: 12, color: subInk, fontStyle: 'italic' }}>Tap to play</span>}
+        <Eyebrow color="rgba(255,255,255,0.9)">Memo · {fmtDuration(note.duration) || '0:00'}</Eyebrow>
+        <div style={{ fontFamily: TYPE.ui, fontWeight: 600, fontSize: 13, color: '#fff', marginTop: 4, display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{note.title}</div>
       </div>
     );
   }
 
-  const preview = note.text ? note.text.slice(0, hero ? 150 : 75) : '';
-  return preview
-    ? <div style={{ fontFamily: TYPE.ui, fontSize: hero ? 13.5 : 12, lineHeight: 1.5, color: subInk, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{preview}</div>
-    : <span style={{ fontFamily: TYPE.ui, fontSize: 12, color: subInk, fontStyle: 'italic' }}>Empty note</span>;
+  if (note.kind === 'todo') {
+    return (
+      <Shell onClick={open} tint={tintFor('todo', dark)} dark={dark} radius={22} pad={15}>
+        <Eyebrow color={subInk}>Checklist</Eyebrow>
+        <div style={{ fontFamily: TYPE.pixel, fontWeight: 400, fontSize: 26, lineHeight: 0.95, color: ink, margin: '4px 0 10px', letterSpacing: 0.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{note.title || 'Checklist'}</div>
+        <TodoMini note={note} dark={dark} ink={ink} subInk={subInk} accent={accent} />
+      </Shell>
+    );
+  }
+
+  // text
+  return (
+    <Shell onClick={open} tint={tintFor('text', dark)} dark={dark} radius={22} pad={15}>
+      <Eyebrow color={subInk}>{relativeTime(note.createdAt)}</Eyebrow>
+      <div style={{ fontFamily: TYPE.serif, fontStyle: 'italic', fontWeight: 400, fontSize: 19, lineHeight: 1.12, color: ink, margin: '4px 0 6px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{note.title || 'Untitled'}</div>
+      {note.text
+        ? <p style={{ margin: 0, fontFamily: TYPE.ui, fontSize: 12.5, lineHeight: 1.5, color: subInk, display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{note.text}</p>
+        : <span style={{ fontFamily: TYPE.ui, fontSize: 12, color: subInk, fontStyle: 'italic' }}>Empty note</span>}
+    </Shell>
+  );
 }
 
-function KindIcon({ kind, color }) {
-  if (kind === 'voice') return <svg width="9" height="9" viewBox="0 0 24 24" fill="none"><rect x="9" y="3" width="6" height="12" rx="3" fill={color}/></svg>;
-  if (kind === 'todo')  return <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/></svg>;
-  if (kind === 'photo') return <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="18" height="14" rx="2" stroke={color} strokeWidth="2.5"/><circle cx="12" cy="13" r="3" stroke={color} strokeWidth="2.5"/></svg>;
-  return null;
+// Checklist preview with pill rows (matches the design's Shopping List)
+function TodoMini({ note, dark, ink, subInk, accent, large = false }) {
+  const items = note.items || [];
+  const done = items.filter(i => i.done).length;
+  const pct = items.length ? (done / items.length) * 100 : 0;
+  const rowBg = dark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.55)';
+  const rowBorder = dark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.8)';
+
+  return (
+    <div style={{ marginTop: large ? 14 : 0 }}>
+      <div style={{ height: 5, borderRadius: 3, background: dark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.08)', overflow: 'hidden', marginBottom: 10 }}>
+        <div style={{ width: `${pct}%`, height: '100%', background: accent, borderRadius: 3, transition: 'width 0.3s' }} />
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {items.slice(0, large ? 4 : 3).map(it => (
+          <div key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '7px 10px', borderRadius: 9999, background: rowBg, border: `0.75px solid ${rowBorder}` }}>
+            <span style={{ width: 15, height: 15, borderRadius: 9999, flexShrink: 0, border: `1.5px solid ${it.done ? accent : (dark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.28)')}`, background: it.done ? accent : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {it.done && <svg width="9" height="9" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+            </span>
+            <span style={{ fontFamily: TYPE.ui, fontSize: 12.5, color: it.done ? subInk : ink, textDecoration: it.done ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.text || 'Item'}</span>
+          </div>
+        ))}
+        {items.length === 0 && <span style={{ fontFamily: TYPE.ui, fontSize: 12.5, color: subInk, fontStyle: 'italic' }}>Empty checklist</span>}
+      </div>
+      {items.length > 0 && <span style={{ display: 'inline-block', marginTop: 9, fontFamily: TYPE.mono, fontSize: 9, letterSpacing: 0.8, color: subInk, textTransform: 'uppercase' }}>{done} of {items.length} done</span>}
+    </div>
+  );
 }
 
 function EmptyState({ dark, tab, openNew, go, ink, subInk }) {
@@ -190,7 +276,7 @@ function EmptyState({ dark, tab, openNew, go, ink, subInk }) {
           <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke={dark ? '#fff' : '#1a1322'} strokeWidth="2.4" strokeLinecap="round"/></svg>
         </div>
       </div>
-      <div style={{ fontFamily: TYPE.display, fontWeight: 700, fontSize: 24, color: ink, marginBottom: 8, letterSpacing: -0.5 }}>
+      <div style={{ fontFamily: TYPE.serif, fontStyle: 'italic', fontWeight: 400, fontSize: 28, color: ink, marginBottom: 8, letterSpacing: -0.3 }}>
         {tab === 'All' ? 'Capture your first thought' : `No ${tab.toLowerCase()} yet`}
       </div>
       <div style={{ fontFamily: TYPE.ui, fontSize: 15, lineHeight: 1.55, color: subInk, maxWidth: 250, marginBottom: 22 }}>Write, make a checklist, snap a photo, or speak it out loud.</div>
