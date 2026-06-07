@@ -4,6 +4,7 @@ import { ScreenHeader } from '../components/ScreensCommon.jsx';
 import { useNotes, makeTitle, uuid, relativeTime, fmtDuration, fmtSize } from '../store/notes.jsx';
 import { useTheme } from '../store/theme.jsx';
 import { loadBlob, saveBlob, deleteBlob } from '../store/audioDB.js';
+import { classifyImage } from '../store/semantic.js';
 
 export function DetailScreen({ go, dark = false, payload }) {
   const { notes, addNote, updateNote, deleteNote } = useNotes();
@@ -44,6 +45,7 @@ function Editor({ go, dark, existing, isDraft, initialKind, pickNow, addNote, up
   const photosRef = React.useRef(photos);
   const itemsRef  = React.useRef(items);
   const filesRef  = React.useRef(files);
+  const labelsRef = React.useRef(existing?.imageLabels || []);
   const bodyRef  = React.useRef(null);
   const fileRef  = React.useRef(null);   // image picker
   const docRef   = React.useRef(null);   // document picker
@@ -73,7 +75,7 @@ function Editor({ go, dark, existing, isDraft, initialKind, pickNow, addNote, up
 
   function ensureCreated() {
     if (idRef.current) return idRef.current;
-    const n = addNote({ kind, title: autoTitle(), text: body, items: itemsRef.current, photos: photosRef.current, files: filesRef.current });
+    const n = addNote({ kind, title: autoTitle(), text: body, items: itemsRef.current, photos: photosRef.current, files: filesRef.current, imageLabels: labelsRef.current });
     idRef.current = n.id;
     return n.id;
   }
@@ -131,6 +133,17 @@ function Editor({ go, dark, existing, isDraft, initialKind, pickNow, addNote, up
     photosRef.current = next;
     setPhotos(next);
     if (idRef.current) updateNote(idRef.current, { kind, photos: next, title: autoTitle() });
+    // Auto-tag images on-device so they become searchable (best-effort, background)
+    (async () => {
+      const set = new Set(labelsRef.current || []);
+      for (const f of files) { (await classifyImage(f)).forEach(l => set.add(l)); }
+      const labels = [...set].slice(0, 24);
+      if (labels.length) {
+        labelsRef.current = labels;
+        const id = ensureCreated();
+        updateNote(id, { imageLabels: labels });
+      }
+    })();
   }
   function removePhoto(pid) {
     deleteBlob(pid);

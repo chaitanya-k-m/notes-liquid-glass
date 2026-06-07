@@ -35,7 +35,42 @@ export function cosine(a, b) {
 export function noteText(n) {
   const parts = [n.title, n.text];
   if (n.items?.length) parts.push(n.items.map(i => i.text).join('. '));
+  if (n.imageLabels?.length) parts.push(n.imageLabels.join(', '));
   return parts.filter(Boolean).join('. ') || 'note';
+}
+
+// ── On-device image labeling (so photos become searchable) ────────────────────
+let labelerPromise = null;
+export function loadImageLabeler() {
+  if (labelerPromise) return labelerPromise;
+  labelerPromise = (async () => {
+    const tf = await import(/* @vite-ignore */ CDN);
+    tf.env.allowLocalModels = false;
+    tf.env.useBrowserCache = true;
+    return tf.pipeline('image-classification', 'Xenova/mobilevit-small', { quantized: true });
+  })();
+  return labelerPromise;
+}
+
+// A few coarse buckets so e.g. "pizza" also matches "food".
+const LABEL_GROUPS = {
+  food: ['pizza', 'burger', 'cheeseburger', 'hotdog', 'sandwich', 'plate', 'guacamole', 'burrito', 'taco', 'soup', 'bowl', 'meat', 'bread', 'cake', 'ice cream', 'salad', 'pasta', 'curry', 'rice', 'noodle', 'sushi', 'consomme', 'trifle', 'dough', 'pretzel', 'bagel', 'espresso', 'red wine', 'banana', 'orange', 'lemon', 'strawberry', 'pineapple', 'fruit', 'restaurant', 'dish', 'breakfast'],
+};
+
+export async function classifyImage(blobOrFile) {
+  try {
+    const labeler = await loadImageLabeler();
+    const url = URL.createObjectURL(blobOrFile);
+    const out = await labeler(url, { topk: 5 });
+    URL.revokeObjectURL(url);
+    const labels = out.map(o => o.label.split(',')[0].trim().toLowerCase());
+    // add coarse group words for better semantic matches
+    const extra = new Set();
+    for (const l of labels) for (const [group, members] of Object.entries(LABEL_GROUPS)) {
+      if (members.some(m => l.includes(m))) extra.add(group);
+    }
+    return [...new Set([...labels, ...extra])];
+  } catch { return []; }
 }
 
 export function hashContent(s) {
@@ -76,11 +111,19 @@ function expand(tokens) {
 
 const tokenize = (s) => (s || '').toLowerCase().replace(/[^\w\s]/g, ' ').split(/\s+/).filter(w => w.length > 1);
 
-export function keywordScore(query, n) {
+export function scoreText(query, text) {
   const qTokens = expand(tokenize(query));
   if (!qTokens.length) return 0;
-  const hay = ' ' + tokenize(noteText(n)).join(' ') + ' ';
+  const hay = ' ' + tokenize(text).join(' ') + ' ';
   let hits = 0;
-  for (const t of qTokens) if (hay.includes(' ' + t) || hay.includes(t)) hits++;
+  for (const t of qTokens) if (hay.includes(t)) hits++;
   return hits / qTokens.length;
+}
+
+export function keywordScore(query, n) {
+  return scoreText(query, noteText(n));
+}
+
+export function titleScore(query, n) {
+  return scoreText(query, n.title || '');
 }

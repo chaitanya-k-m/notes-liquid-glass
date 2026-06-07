@@ -3,16 +3,18 @@ import { TYPE, GlassCard } from '../design-system.jsx';
 import { ScreenHeader, Thumb } from '../components/ScreensCommon.jsx';
 import { useNotes, relativeTime, fmtDuration } from '../store/notes.jsx';
 import { useTheme } from '../store/theme.jsx';
+import { loadBlob } from '../store/audioDB.js';
 import {
   loadEmbedder, embed, cosine, noteText, hashContent,
-  loadCache, saveCache, keywordScore,
+  loadCache, saveCache, keywordScore, titleScore, classifyImage,
 } from '../store/semantic.js';
 
 const SUGGESTIONS = ['movies', 'food & recipes', 'travel plans', 'work tasks', 'ideas'];
 
 export function SearchScreen({ go }) {
-  const { notes } = useNotes();
+  const { notes, updateNote } = useNotes();
   const { dark, accent } = useTheme();
+  const taggedRef = React.useRef(new Set());
   const [raw, setRaw]     = React.useState('');
   const [query, setQuery] = React.useState('');
   const [status, setStatus] = React.useState('loading'); // loading | ready | fallback
@@ -41,6 +43,23 @@ export function SearchScreen({ go }) {
       .catch(() => { if (alive) setStatus('fallback'); });
     return () => { alive = false; if (recRef.current) { try { recRef.current.stop(); } catch {} } };
   }, []);
+
+  // Backfill image labels for existing un-tagged photos (one pass each)
+  React.useEffect(() => {
+    if (status !== 'ready') return;
+    let alive = true;
+    (async () => {
+      for (const n of notes) {
+        if (!alive) break;
+        if (n.photos?.length && !(n.imageLabels?.length) && !taggedRef.current.has(n.id)) {
+          taggedRef.current.add(n.id);
+          const blob = await loadBlob(n.photos[0]);
+          if (blob) { const labels = await classifyImage(blob); if (labels.length) updateNote(n.id, { imageLabels: labels }); }
+        }
+      }
+    })();
+    return () => { alive = false; };
+  }, [status, notes]);
 
   // Build/refresh embeddings when ready or notes change
   React.useEffect(() => {
@@ -81,14 +100,21 @@ export function SearchScreen({ go }) {
         const scored = notes.map(n => {
           const e = cache[n.id];
           const sem = (qv && e) ? cosine(qv, e.v) : 0;
-          const kw = keywordScore(q, n);
-          return { n, score: Math.max(sem, kw * 0.55) + (kw > 0 ? 0.04 : 0), sem, kw };
-        }).filter(r => r.score > 0.24 || r.kw >= 0.5)
+          const kw = keywordScore(q, n);     // matches title + body + items + image labels
+          const ttl = titleScore(q, n);      // strong signal when the title itself matches
+          // semantic is primary; keyword/title give decisive boosts so direct
+          // hits (incl. a food photo tagged "pizza/food") rise to the top.
+          const score = sem + kw * 0.4 + ttl * 0.5;
+          return { n, score, sem, kw };
+        }).filter(r => r.score > 0.26 || r.kw >= 0.5)
           .sort((a, b) => b.score - a.score);
         setResults(scored);
       } else {
-        const scored = notes.map(n => { const kw = keywordScore(q, n); return { n, score: kw, kw }; })
-          .filter(r => r.score > 0).sort((a, b) => b.score - a.score);
+        const scored = notes.map(n => {
+          const kw = keywordScore(q, n);
+          const ttl = titleScore(q, n);
+          return { n, score: kw + ttl * 0.5, kw };
+        }).filter(r => r.score > 0).sort((a, b) => b.score - a.score);
         setResults(scored);
       }
     })();
