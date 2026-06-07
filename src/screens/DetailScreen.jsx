@@ -141,10 +141,13 @@ function Editor({ go, dark, existing, isDraft, initialKind, pickNow, addNote, up
         <ScreenHeader dark={dark} back={handleBack} eyebrow={isDraft && !idRef.current ? `New · ${eyebrow}` : eyebrow} />
 
         <div style={{ padding: '8px 18px 24px' }}>
-          {/* Title */}
+          {/* Title — serif for notes, pixel for checklists (matches home) */}
           <input
-            value={title} onChange={e => setTitle(e.target.value)} placeholder="Title"
-            style={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', fontFamily: TYPE.display, fontWeight: 700, fontSize: 28, lineHeight: 1.15, letterSpacing: -0.8, color: ink, marginBottom: 8, padding: 0 }}
+            value={title} onChange={e => setTitle(e.target.value)} placeholder={kind === 'todo' ? 'Checklist title' : 'Title'}
+            style={kind === 'todo'
+              ? { width: '100%', border: 'none', outline: 'none', background: 'transparent', fontFamily: TYPE.pixel, fontWeight: 400, fontSize: 36, lineHeight: 0.95, letterSpacing: 0.5, color: ink, marginBottom: 8, padding: 0 }
+              : { width: '100%', border: 'none', outline: 'none', background: 'transparent', fontFamily: TYPE.serif, fontStyle: 'italic', fontWeight: 400, fontSize: 30, lineHeight: 1.12, letterSpacing: 0, color: ink, marginBottom: 8, padding: 0 }
+            }
           />
 
           {/* Meta */}
@@ -201,31 +204,34 @@ function Editor({ go, dark, existing, isDraft, initialKind, pickNow, addNote, up
                   </div>
                 );
               })()}
-              {items.map(it => (
-                <div key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0' }}>
-                  <button onClick={() => toggleItem(it.id)} style={{
-                    width: 22, height: 22, borderRadius: 7, flexShrink: 0, cursor: 'pointer', padding: 0,
-                    border: `1.5px solid ${it.done ? accent : (dark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.3)')}`,
-                    background: it.done ? accent : 'transparent',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s',
-                  }}>
-                    {it.done && <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-                  </button>
-                  <input
-                    value={it.text}
-                    onChange={e => editItem(it.id, e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addItem(); } if (e.key === 'Backspace' && !it.text) { e.preventDefault(); removeItem(it.id); } }}
-                    placeholder="List item…"
-                    style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: TYPE.ui, fontSize: 16, color: it.done ? subInk : ink, textDecoration: it.done ? 'line-through' : 'none' }}
-                  />
-                  <button onClick={() => removeItem(it.id)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: subInk, padding: 4, flexShrink: 0 }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
-                  </button>
-                </div>
-              ))}
-              <button onClick={addItem} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', border: 'none', background: 'transparent', cursor: 'pointer', color: subInk, fontFamily: TYPE.ui, fontSize: 15 }}>
-                <span style={{ width: 22, height: 22, borderRadius: 7, border: `1.5px dashed ${dark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.25)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"/></svg>
+              {items.map(it => {
+                const checkFill = dark ? '#fff' : '#1f1830';
+                return (
+                  <div key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 9999, background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.55)', border: `0.75px solid ${dark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.8)'}` }}>
+                    <button onClick={() => toggleItem(it.id)} style={{
+                      width: 20, height: 20, borderRadius: 9999, flexShrink: 0, cursor: 'pointer', padding: 0,
+                      border: `1.5px solid ${it.done ? checkFill : (dark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.28)')}`,
+                      background: it.done ? checkFill : 'transparent',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s',
+                    }}>
+                      {it.done && <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke={dark ? '#1a1322' : '#fff'} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                    </button>
+                    <input
+                      value={it.text}
+                      onChange={e => editItem(it.id, e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addItem(); } if (e.key === 'Backspace' && !it.text) { e.preventDefault(); removeItem(it.id); } }}
+                      placeholder="List item…"
+                      style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: TYPE.ui, fontSize: 15, color: it.done ? subInk : ink, textDecoration: it.done ? 'line-through' : 'none' }}
+                    />
+                    <button onClick={() => removeItem(it.id)} aria-label="Remove" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: subInk, padding: 2, flexShrink: 0, display: 'flex' }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+                    </button>
+                  </div>
+                );
+              })}
+              <button onClick={addItem} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', marginTop: 2, border: 'none', background: 'transparent', cursor: 'pointer', color: subInk, fontFamily: TYPE.ui, fontSize: 15 }}>
+                <span style={{ width: 20, height: 20, borderRadius: 9999, border: `1.5px dashed ${dark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.25)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"/></svg>
                 </span>
                 Add item
               </button>
