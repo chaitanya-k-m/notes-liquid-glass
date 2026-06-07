@@ -131,7 +131,7 @@ export function SearchScreen({ go }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
       <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
-        <ScreenHeader dark={dark} back={() => go('home')} eyebrow="Search" menu={false} />
+        <ScreenHeader dark={dark} back={() => go('home')} eyebrow="Find anything" title="Search" titleFont="serif" menu={false} />
 
         {/* Search input */}
         <div style={{ padding: '8px 18px 10px' }}>

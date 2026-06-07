@@ -2,6 +2,7 @@ import React from 'react';
 import { TYPE, GlassCard, Waveform } from '../design-system.jsx';
 import { ScreenHeader, CircleBtn } from '../components/ScreensCommon.jsx';
 import { useNotes } from '../store/notes.jsx';
+import { useTheme } from '../store/theme.jsx';
 import { saveAudio } from '../store/audioDB.js';
 
 function pickMime() {
@@ -15,6 +16,7 @@ function pickMime() {
 
 export function VoiceScreen({ go, dark = false }) {
   const { addNote } = useNotes();
+  const { accent } = useTheme();
 
   const [phase, setPhase]             = React.useState('idle'); // idle | recording | saving
   const [seconds, setSeconds]         = React.useState(0);
@@ -209,6 +211,9 @@ export function VoiceScreen({ go, dark = false }) {
             filter: 'blur(30px)', pointerEvents: 'none',
             animation: recording ? 'vBreathe 3.6s ease-in-out infinite alternate' : 'none',
           }} />
+          <div style={{ fontFamily: TYPE.mono, fontSize: 10, letterSpacing: 2.5, textTransform: 'uppercase', color: dark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)', marginBottom: 10, position: 'relative' }}>
+            Voice Memo
+          </div>
           <div style={{ fontFamily: TYPE.display, fontSize: 72, fontWeight: 300, color: dark ? '#fff' : '#1a1322', letterSpacing: -4, lineHeight: 1, position: 'relative' }}>
             {fmt(seconds)}
           </div>
@@ -233,7 +238,7 @@ export function VoiceScreen({ go, dark = false }) {
                 {transcript && <span>{transcript} </span>}
                 {interimText && <span style={{ color: dark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.35)', fontStyle: 'italic' }}>{interimText}</span>}
                 {!displayTranscript && !recording && <span style={{ color: dark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.28)', fontStyle: 'italic' }}>Your words will appear here…</span>}
-                <span style={{ display: recording ? 'inline-block' : 'none', width: 2, height: 16, background: '#a4537a', marginLeft: 2, verticalAlign: 'middle', animation: 'caretBlink 0.9s steps(1) infinite' }} />
+                <span style={{ display: recording ? 'inline-block' : 'none', width: 2, height: 16, background: accent, marginLeft: 2, verticalAlign: 'middle', animation: 'caretBlink 0.9s steps(1) infinite' }} />
               </div>
             </GlassCard>
           </div>
