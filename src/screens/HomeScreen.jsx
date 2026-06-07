@@ -5,7 +5,7 @@ import { useNotes, relativeTime, fmtDuration } from '../store/notes.jsx';
 import { useTheme } from '../store/theme.jsx';
 import { fetchDaily, localDaily, localRandom } from '../store/quotes.js';
 
-const TABS = ['All', 'Notes', 'Voice', 'To-Do', 'Photos', 'Files'];
+const TABS = ['Pinned', 'Notes', 'Voice', 'To-Do', 'Photos', 'Files'];
 
 const fmtDate = (iso) => {
   const d = new Date(iso);
@@ -19,10 +19,11 @@ function tintFor(kind, dark) {
 }
 
 export function HomeScreen({ go, openNew }) {
-  const { notes } = useNotes();
+  const { notes, updateNote } = useNotes();
   const { dark, accent } = useTheme();
-  const [tab, setTab] = React.useState('All');
+  const [tab, setTab] = React.useState('Pinned');
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  const togglePin = (n) => updateNote(n.id, { pinned: !n.pinned });
 
   const filtered = notes.filter(n => {
     if (tab === 'Notes')  return n.kind === 'text';
@@ -30,7 +31,7 @@ export function HomeScreen({ go, openNew }) {
     if (tab === 'To-Do')  return n.kind === 'todo';
     if (tab === 'Photos') return n.kind === 'photo' || (n.photos && n.photos.length > 0);
     if (tab === 'Files')  return n.kind === 'file' || (n.files && n.files.length > 0);
-    return true;
+    return n.pinned; // Pinned tab
   });
 
   const allPhotos = notes.flatMap(n => (n.photos || []).map(pid => ({ pid, noteId: n.id })));
@@ -48,22 +49,22 @@ export function HomeScreen({ go, openNew }) {
         </div>
 
         <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {tab === 'All' && <QuoteHero dark={dark} ink={ink} subInk={subInk} />}
+          {tab === 'Pinned' && <QuoteHero dark={dark} ink={ink} subInk={subInk} />}
 
           {filtered.length === 0
             ? <EmptyState dark={dark} tab={tab} openNew={openNew} go={go} ink={ink} subInk={subInk} />
             : <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, alignItems: 'start' }}>
-                {filtered.map(n => <Card key={n.id} note={n} go={go} dark={dark} ink={ink} subInk={subInk} accent={accent} />)}
+                {filtered.map(n => <Card key={n.id} note={n} go={go} dark={dark} ink={ink} subInk={subInk} accent={accent} onPin={() => togglePin(n)} />)}
               </div>
           }
 
-          {tab === 'All' && (allPhotos.length > 0 || fileCount > 0) && (
+          {tab === 'Pinned' && (allPhotos.length > 0 || fileCount > 0) && (
             <div style={{ display: 'grid', gridTemplateColumns: allPhotos.length > 0 && fileCount > 0 ? '1.6fr 1fr' : '1fr', gap: 12 }}>
               {allPhotos.length > 0 && <Snapshots photos={allPhotos} go={go} dark={dark} ink={ink} subInk={subInk} />}
               {fileCount > 0 && <SavedCard count={fileCount} onClick={() => setTab('Files')} dark={dark} ink={ink} subInk={subInk} />}
             </div>
           )}
-          {tab === 'All' && <QuickCapture onClick={() => go('voice')} onWrite={() => go('detail', { draft: true, kind: 'text' })} dark={dark} subInk={subInk} />}
+          {tab === 'Pinned' && <QuickCapture onClick={() => go('voice')} onWrite={() => go('detail', { draft: true, kind: 'text' })} dark={dark} subInk={subInk} />}
         </div>
 
         <div style={{ height: 120 }} />
@@ -184,13 +185,14 @@ function SavedCard({ count, onClick, dark, ink, subInk }) {
 }
 
 // ── Shell ─────────────────────────────────────────────────────────────────────
-function Shell({ children, onClick, tint, radius = 22, pad = 15, dark, stripes = false, style = {} }) {
+function Shell({ children, onClick, tint, radius = 22, pad = 15, dark, stripes = false, corner = null, style = {} }) {
   return (
     <div onClick={onClick} style={{ position: 'relative', borderRadius: radius, overflow: 'hidden', cursor: 'pointer', boxShadow: dark ? '0 8px 22px rgba(0,0,0,0.28)' : '0 1px 0 rgba(255,255,255,0.6) inset, 0 8px 22px rgba(80,60,90,0.12)', ...style }}>
       <div style={{ position: 'absolute', inset: 0, background: tint, backdropFilter: 'blur(20px) saturate(160%)', WebkitBackdropFilter: 'blur(20px) saturate(160%)', pointerEvents: 'none' }} />
       {stripes && <div style={{ position: 'absolute', inset: 0, background: STRIPES, pointerEvents: 'none' }} />}
       <div style={{ position: 'absolute', inset: 0, borderRadius: radius, border: `0.75px solid ${dark ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.7)'}`, pointerEvents: 'none' }} />
       <div style={{ position: 'relative', padding: pad }}>{children}</div>
+      {corner}
     </div>
   );
 }
@@ -199,16 +201,40 @@ const Eyebrow = ({ children, color }) => (
   <span style={{ fontFamily: TYPE.mono, fontSize: 9.5, letterSpacing: 2, textTransform: 'uppercase', color }}>{children}</span>
 );
 
+// ── Pin toggle (overlay on cards) ─────────────────────────────────────────────
+function PinToggle({ pinned, onClick, light = false }) {
+  const idle = light ? '#fff' : '#1f1830';
+  const bg = pinned
+    ? (light ? 'rgba(255,255,255,0.92)' : 'rgba(31,24,48,0.92)')
+    : (light ? 'rgba(0,0,0,0.28)' : 'rgba(255,255,255,0.6)');
+  const icon = pinned ? (light ? '#1f1830' : '#fff') : idle;
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); navigator.vibrate?.(6); onClick(); }}
+      aria-label={pinned ? 'Unpin' : 'Pin'}
+      style={{ position: 'absolute', top: 8, right: 8, zIndex: 6, width: 28, height: 28, borderRadius: 14, border: 'none', cursor: 'pointer', background: bg, backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: light ? 'none' : '0 1px 4px rgba(60,40,80,0.12)' }}
+    >
+      <svg width="13" height="13" viewBox="0 0 24 24" fill={pinned ? icon : 'none'} stroke={icon} strokeWidth={pinned ? 0 : 1.8} strokeLinejoin="round" strokeLinecap="round">
+        <path d="M9 3.5h6l-1 5 2.5 3.2V14H7.5v-2.3L10 8.5l-1-5z" />
+        <path d="M12 14v6.5" stroke={icon} strokeWidth="1.8" fill="none" />
+      </svg>
+    </button>
+  );
+}
+
 // ── Per-kind grid card ────────────────────────────────────────────────────────
-function Card({ note, go, dark, ink, subInk, accent }) {
+function Card({ note, go, dark, ink, subInk, accent, onPin }) {
   const open = () => go('detail', { noteId: note.id });
+  const pin = <PinToggle pinned={note.pinned} onClick={onPin} />;
+  const pinLight = <PinToggle pinned={note.pinned} onClick={onPin} light />;
 
   if (note.photos?.length > 0) {
     return (
       <div onClick={open} style={{ position: 'relative', borderRadius: 22, overflow: 'hidden', cursor: 'pointer', height: 172, boxShadow: '0 8px 22px rgba(60,40,80,0.16)' }}>
         <Thumb id={note.photos[0]} radius={0} style={{ position: 'absolute', inset: 0 }} />
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.05) 55%)' }} />
-        {note.photos.length > 1 && <div style={{ position: 'absolute', top: 9, right: 9, padding: '3px 8px', borderRadius: 9999, background: 'rgba(0,0,0,0.45)', fontFamily: TYPE.mono, fontSize: 9.5, color: '#fff', fontWeight: 600 }}>{note.photos.length}</div>}
+        {note.photos.length > 1 && <div style={{ position: 'absolute', top: 11, left: 11, padding: '3px 8px', borderRadius: 9999, background: 'rgba(0,0,0,0.45)', fontFamily: TYPE.mono, fontSize: 9.5, color: '#fff', fontWeight: 600 }}>{note.photos.length}</div>}
+        {pinLight}
         <div style={{ position: 'absolute', left: 12, right: 12, bottom: 11 }}>
           <Eyebrow color="rgba(255,255,255,0.8)">{relativeTime(note.createdAt)}</Eyebrow>
           <div style={{ fontFamily: TYPE.serif, fontStyle: 'italic', fontSize: 17, color: '#fff', lineHeight: 1.1, marginTop: 2, textShadow: '0 1px 8px rgba(0,0,0,0.4)' }}>{note.title || 'Photos'}</div>
@@ -220,6 +246,7 @@ function Card({ note, go, dark, ink, subInk, accent }) {
   if (note.kind === 'voice') {
     return (
       <div onClick={open} style={{ position: 'relative', borderRadius: 22, overflow: 'hidden', cursor: 'pointer', padding: 16, background: 'linear-gradient(150deg, #b79bef, #8d6fd6)', boxShadow: '0 8px 22px rgba(110,80,200,0.3)' }}>
+        {pinLight}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
           <div style={{ width: 34, height: 34, borderRadius: 17, background: 'rgba(255,255,255,0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="#6644b8" style={{ marginLeft: 2 }}><path d="M8 5v14l11-7z"/></svg>
@@ -235,11 +262,8 @@ function Card({ note, go, dark, ink, subInk, accent }) {
   if (note.kind === 'file' || note.files?.length > 0) {
     const files = note.files || [];
     return (
-      <Shell onClick={open} tint={dark ? 'rgba(220,140,170,0.12)' : 'rgba(245,210,225,0.6)'} dark={dark} radius={22} pad={15}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Eyebrow color={subInk}>{files.length} saved</Eyebrow>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M14 3v5h5M14 3l5 5v11a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" stroke={dark ? 'rgba(255,255,255,0.7)' : '#a8336f'} strokeWidth="1.8" strokeLinejoin="round"/></svg>
-        </div>
+      <Shell onClick={open} tint={dark ? 'rgba(220,140,170,0.12)' : 'rgba(245,210,225,0.6)'} dark={dark} radius={22} pad={15} corner={pin}>
+        <Eyebrow color={subInk}>{files.length} saved</Eyebrow>
         <div style={{ fontFamily: TYPE.serif, fontStyle: 'italic', fontSize: 18, color: ink, margin: '6px 0 8px', lineHeight: 1.15, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{note.title || 'Saved files'}</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           {files.slice(0, 3).map(f => (
@@ -252,18 +276,18 @@ function Card({ note, go, dark, ink, subInk, accent }) {
 
   if (note.kind === 'todo') {
     return (
-      <Shell onClick={open} tint={tintFor('todo', dark)} dark={dark} radius={22} pad={15}>
+      <Shell onClick={open} tint={tintFor('todo', dark)} dark={dark} radius={22} pad={15} corner={pin}>
         <Eyebrow color={subInk}>Checklist</Eyebrow>
-        <div style={{ fontFamily: TYPE.pixel, fontWeight: 400, fontSize: 26, lineHeight: 0.95, color: ink, margin: '4px 0 12px', letterSpacing: 0.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{note.title || 'Checklist'}</div>
+        <div style={{ fontFamily: TYPE.pixel, fontWeight: 400, fontSize: 26, lineHeight: 0.95, color: ink, margin: '4px 0 12px', letterSpacing: 0.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', paddingRight: 26 }}>{note.title || 'Checklist'}</div>
         <TodoMini note={note} dark={dark} ink={ink} subInk={subInk} />
       </Shell>
     );
   }
 
   return (
-    <Shell onClick={open} tint={tintFor('text', dark)} dark={dark} radius={22} pad={15}>
+    <Shell onClick={open} tint={tintFor('text', dark)} dark={dark} radius={22} pad={15} corner={pin}>
       <Eyebrow color={subInk}>{relativeTime(note.createdAt)}</Eyebrow>
-      <div style={{ fontFamily: TYPE.serif, fontStyle: 'italic', fontWeight: 400, fontSize: 19, lineHeight: 1.12, color: ink, margin: '4px 0 6px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{note.title || 'Untitled'}</div>
+      <div style={{ fontFamily: TYPE.serif, fontStyle: 'italic', fontWeight: 400, fontSize: 19, lineHeight: 1.12, color: ink, margin: '4px 0 6px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', paddingRight: 26 }}>{note.title || 'Untitled'}</div>
       {note.text
         ? <p style={{ margin: 0, fontFamily: TYPE.ui, fontSize: 12.5, lineHeight: 1.5, color: subInk, display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{note.text}</p>
         : <span style={{ fontFamily: TYPE.ui, fontSize: 12, color: subInk, fontStyle: 'italic' }}>Empty note</span>}
@@ -293,6 +317,7 @@ function TodoMini({ note, dark, ink, subInk }) {
 }
 
 function EmptyState({ dark, tab, openNew, go, ink, subInk }) {
+  const isPinned = tab === 'Pinned';
   const actions = [
     { key: 'write',  label: 'Write',     onClick: () => go('detail', { draft: true, kind: 'text' }) },
     { key: 'todo',   label: 'Checklist', onClick: () => go('detail', { draft: true, kind: 'todo' }) },
@@ -302,9 +327,13 @@ function EmptyState({ dark, tab, openNew, go, ink, subInk }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '24px 16px 8px', textAlign: 'center' }}>
       <div style={{ fontFamily: TYPE.serif, fontStyle: 'italic', fontWeight: 400, fontSize: 22, color: ink, marginBottom: 8 }}>
-        {tab === 'All' ? 'Nothing here yet — capture something' : `No ${tab.toLowerCase()} yet`}
+        {isPinned ? 'Nothing pinned yet' : `No ${tab.toLowerCase()} yet`}
       </div>
-      <div style={{ fontFamily: TYPE.ui, fontSize: 14, lineHeight: 1.5, color: subInk, maxWidth: 250, marginBottom: 18 }}>Write, make a checklist, snap a photo, or speak it out loud.</div>
+      <div style={{ fontFamily: TYPE.ui, fontSize: 14, lineHeight: 1.5, color: subInk, maxWidth: 260, marginBottom: 18 }}>
+        {isPinned
+          ? 'Pin a note (tap the 📌 on any card, or open it and tap Pin) to keep it on your home screen. Browse everything with the tabs above.'
+          : 'Write, make a checklist, snap a photo, or speak it out loud.'}
+      </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
         {actions.map(a => <button key={a.key} onClick={a.onClick} style={{ padding: '10px 16px', borderRadius: 9999, cursor: 'pointer', border: `1px solid ${dark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.12)'}`, background: dark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.55)', color: ink, fontFamily: TYPE.ui, fontWeight: 600, fontSize: 13.5 }}>{a.label}</button>)}
       </div>

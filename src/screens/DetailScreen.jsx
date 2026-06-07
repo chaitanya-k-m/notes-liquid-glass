@@ -36,6 +36,7 @@ function Editor({ go, dark, existing, isDraft, initialKind, pickNow, addNote, up
   const [items, setItems] = React.useState(existing?.items || (kind === 'todo' ? [{ id: uuid(), text: '', done: false }] : []));
   const [photos, setPhotos] = React.useState(existing?.photos || []);
   const [files, setFiles]   = React.useState(existing?.files || []);
+  const [pinned, setPinned] = React.useState(!!existing?.pinned);
   const [confirmDelete, setConfirmDelete] = React.useState(false);
   const [saved, setSaved] = React.useState(false);
 
@@ -105,6 +106,14 @@ function Editor({ go, dark, existing, isDraft, initialKind, pickNow, addNote, up
     if (!confirmDelete) { setConfirmDelete(true); return; }
     if (idRef.current) deleteNote(idRef.current);
     go('home');
+  }
+
+  function togglePin() {
+    const next = !pinned;
+    setPinned(next);
+    navigator.vibrate?.(6);
+    const id = ensureCreated();
+    updateNote(id, { pinned: next });
   }
 
   // ── Photo handling ──
@@ -192,7 +201,16 @@ function Editor({ go, dark, existing, isDraft, initialKind, pickNow, addNote, up
               {createdAt ? new Date(createdAt).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : 'Now'}
             </span>
             {existing?.duration > 0 && <><span style={{ width: 3, height: 3, borderRadius: '50%', background: subInk }} /><span style={{ fontFamily: TYPE.mono, fontSize: 9.5, color: subInk }}>{fmtDuration(existing.duration)}</span></>}
-            <span style={{ marginLeft: 'auto', fontFamily: TYPE.mono, fontSize: 9.5, color: saved ? '#3a9d6e' : subInk, transition: 'color 0.3s' }}>
+            <button onClick={togglePin} style={{
+              marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer',
+              padding: '5px 11px', borderRadius: 9999, border: 'none',
+              background: pinned ? accent : (dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)'),
+              color: pinned ? '#fff' : subInk, fontFamily: TYPE.ui, fontWeight: 600, fontSize: 11.5,
+            }}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill={pinned ? '#fff' : 'none'} stroke={pinned ? 'none' : 'currentColor'} strokeWidth="1.8" strokeLinejoin="round"><path d="M9 3.5h6l-1 5 2.5 3.2V14H7.5v-2.3L10 8.5l-1-5z"/><path d="M12 14v6.5" stroke={pinned ? '#fff' : 'currentColor'} strokeWidth="1.8" fill="none"/></svg>
+              {pinned ? 'Pinned' : 'Pin'}
+            </button>
+            <span style={{ fontFamily: TYPE.mono, fontSize: 9.5, color: saved ? '#3a9d6e' : subInk, transition: 'color 0.3s' }}>
               {saved ? '✓ saved' : createdAt ? relativeTime(createdAt) : ''}
             </span>
           </div>
