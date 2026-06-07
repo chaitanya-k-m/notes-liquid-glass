@@ -3,32 +3,14 @@ import { TYPE, SoftPill, Waveform } from '../design-system.jsx';
 import { ScreenHeader, BottomDock, Thumb } from '../components/ScreensCommon.jsx';
 import { useNotes, relativeTime, fmtDuration } from '../store/notes.jsx';
 import { useTheme } from '../store/theme.jsx';
+import { fetchDaily, localDaily, localRandom } from '../store/quotes.js';
 
-const TABS = ['All', 'Notes', 'Voice', 'To-Do', 'Photos'];
-
-const QUOTES = [
-  ['Embrace the moment — let your spirit soar.', 'Morning Reflection'],
-  ['What you do today can improve all your tomorrows.', 'Ralph Marston'],
-  ['The quieter you become, the more you can hear.', 'Ram Dass'],
-  ['Almost everything will work again if you unplug it — including you.', 'Anne Lamott'],
-  ['Start where you are. Use what you have. Do what you can.', 'Arthur Ashe'],
-  ['Little by little, one travels far.', 'J.R.R. Tolkien'],
-  ['The best way out is always through.', 'Robert Frost'],
-  ['Do the small things as if they were great.', 'Pascal'],
-  ['You are allowed to be both a masterpiece and a work in progress.', 'Sophia Bush'],
-  ['Simplicity is the ultimate sophistication.', 'Leonardo da Vinci'],
-  ['How we spend our days is how we spend our lives.', 'Annie Dillard'],
-  ['Slow is smooth, and smooth is fast.', 'Proverb'],
-  ['A clear mind is a quiet superpower.', 'Daily Note'],
-  ['Write it down. Make it real.', 'Daily Note'],
-  ['Tend the thoughts you want to grow.', 'Daily Note'],
-];
+const TABS = ['All', 'Notes', 'Voice', 'To-Do', 'Photos', 'Files'];
 
 const fmtDate = (iso) => {
   const d = new Date(iso);
   return `${String(d.getDate()).padStart(2, '0')} / ${String(d.getMonth() + 1).padStart(2, '0')} / ${String(d.getFullYear()).slice(2)}`;
 };
-const dayOfYear = () => { const n = new Date(); return Math.floor((n - new Date(n.getFullYear(), 0, 0)) / 86400000); };
 const STRIPES = 'repeating-linear-gradient(135deg, rgba(0,0,0,0.04) 0 9px, transparent 9px 18px)';
 
 function tintFor(kind, dark) {
@@ -47,10 +29,12 @@ export function HomeScreen({ go, openNew }) {
     if (tab === 'Voice')  return n.kind === 'voice';
     if (tab === 'To-Do')  return n.kind === 'todo';
     if (tab === 'Photos') return n.kind === 'photo' || (n.photos && n.photos.length > 0);
+    if (tab === 'Files')  return n.kind === 'file' || (n.files && n.files.length > 0);
     return true;
   });
 
   const allPhotos = notes.flatMap(n => (n.photos || []).map(pid => ({ pid, noteId: n.id })));
+  const fileCount = notes.reduce((sum, n) => sum + (n.files?.length || 0), 0);
   const ink = dark ? '#fff' : '#1a1322';
   const subInk = dark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)';
 
@@ -73,7 +57,12 @@ export function HomeScreen({ go, openNew }) {
               </div>
           }
 
-          {tab === 'All' && allPhotos.length > 0 && <Snapshots photos={allPhotos} go={go} dark={dark} ink={ink} subInk={subInk} />}
+          {tab === 'All' && (allPhotos.length > 0 || fileCount > 0) && (
+            <div style={{ display: 'grid', gridTemplateColumns: allPhotos.length > 0 && fileCount > 0 ? '1.6fr 1fr' : '1fr', gap: 12 }}>
+              {allPhotos.length > 0 && <Snapshots photos={allPhotos} go={go} dark={dark} ink={ink} subInk={subInk} />}
+              {fileCount > 0 && <SavedCard count={fileCount} onClick={() => setTab('Files')} dark={dark} ink={ink} subInk={subInk} />}
+            </div>
+          )}
           {tab === 'All' && <QuickCapture onClick={() => go('voice')} onWrite={() => go('detail', { draft: true, kind: 'text' })} dark={dark} subInk={subInk} />}
         </div>
 
@@ -87,9 +76,10 @@ export function HomeScreen({ go, openNew }) {
 
 // ── Today's Thought — quote of the day ────────────────────────────────────────
 function QuoteHero({ dark, ink, subInk }) {
-  const [idx, setIdx] = React.useState(() => dayOfYear() % QUOTES.length);
-  const [quote, author] = QUOTES[idx];
-  const shuffle = (e) => { e.stopPropagation(); setIdx(i => (i + 1 + Math.floor(Math.random() * (QUOTES.length - 1))) % QUOTES.length); };
+  const [q, setQ] = React.useState(() => localDaily());
+  React.useEffect(() => { let alive = true; fetchDaily().then(r => { if (alive && r) setQ(r); }); return () => { alive = false; }; }, []);
+  const { text: quote, author } = q;
+  const shuffle = (e) => { e.stopPropagation(); setQ(localRandom()); };
 
   return (
     <div style={{
@@ -174,6 +164,25 @@ function Snapshots({ photos, go, dark, ink, subInk }) {
   );
 }
 
+// ── Saved files summary card (design's "Pdf / 12 Saved") ──────────────────────
+function SavedCard({ count, onClick, dark, ink, subInk }) {
+  return (
+    <div onClick={onClick} style={{
+      position: 'relative', borderRadius: 24, overflow: 'hidden', cursor: 'pointer', minHeight: 150,
+      background: dark ? 'linear-gradient(155deg, rgba(220,140,170,0.22), rgba(160,90,130,0.2))' : 'linear-gradient(155deg, rgba(247,210,224,0.85), rgba(238,190,210,0.8))',
+      border: `0.75px solid ${dark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.8)'}`,
+      boxShadow: dark ? '0 8px 22px rgba(0,0,0,0.28)' : '0 8px 22px rgba(160,90,130,0.16)',
+      padding: 16,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontFamily: TYPE.mono, fontSize: 9.5, letterSpacing: 1.6, textTransform: 'uppercase', color: dark ? 'rgba(255,255,255,0.7)' : '#a8336f' }}>{count} Saved</span>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 5a1 1 0 0 1 1-1h6l2 2h6a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z" stroke={dark ? 'rgba(255,255,255,0.65)' : '#a8336f'} strokeWidth="1.6"/></svg>
+      </div>
+      <div style={{ position: 'absolute', left: 16, bottom: 8, fontFamily: TYPE.script, fontSize: 56, lineHeight: 1, color: dark ? 'rgba(255,255,255,0.92)' : '#a8336f' }}>Files</div>
+    </div>
+  );
+}
+
 // ── Shell ─────────────────────────────────────────────────────────────────────
 function Shell({ children, onClick, tint, radius = 22, pad = 15, dark, stripes = false, style = {} }) {
   return (
@@ -220,6 +229,24 @@ function Card({ note, go, dark, ink, subInk, accent }) {
         <Eyebrow color="rgba(255,255,255,0.9)">Memo · {fmtDuration(note.duration) || '0:00'}</Eyebrow>
         <div style={{ fontFamily: TYPE.ui, fontWeight: 600, fontSize: 13, color: '#fff', marginTop: 4, display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{note.title}</div>
       </div>
+    );
+  }
+
+  if (note.kind === 'file' || note.files?.length > 0) {
+    const files = note.files || [];
+    return (
+      <Shell onClick={open} tint={dark ? 'rgba(220,140,170,0.12)' : 'rgba(245,210,225,0.6)'} dark={dark} radius={22} pad={15}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Eyebrow color={subInk}>{files.length} saved</Eyebrow>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M14 3v5h5M14 3l5 5v11a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" stroke={dark ? 'rgba(255,255,255,0.7)' : '#a8336f'} strokeWidth="1.8" strokeLinejoin="round"/></svg>
+        </div>
+        <div style={{ fontFamily: TYPE.serif, fontStyle: 'italic', fontSize: 18, color: ink, margin: '6px 0 8px', lineHeight: 1.15, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{note.title || 'Saved files'}</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {files.slice(0, 3).map(f => (
+            <div key={f.id} style={{ fontFamily: TYPE.mono, fontSize: 10, color: subInk, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>· {f.name}</div>
+          ))}
+        </div>
+      </Shell>
     );
   }
 

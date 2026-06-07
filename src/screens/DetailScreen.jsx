@@ -1,7 +1,7 @@
 import React from 'react';
 import { TYPE, GlassCard } from '../design-system.jsx';
 import { ScreenHeader } from '../components/ScreensCommon.jsx';
-import { useNotes, makeTitle, uuid, relativeTime, fmtDuration } from '../store/notes.jsx';
+import { useNotes, makeTitle, uuid, relativeTime, fmtDuration, fmtSize } from '../store/notes.jsx';
 import { useTheme } from '../store/theme.jsx';
 import { loadBlob, saveBlob, deleteBlob } from '../store/audioDB.js';
 
@@ -35,28 +35,33 @@ function Editor({ go, dark, existing, isDraft, initialKind, pickNow, addNote, up
   const [body, setBody]   = React.useState(existing?.text || '');
   const [items, setItems] = React.useState(existing?.items || (kind === 'todo' ? [{ id: uuid(), text: '', done: false }] : []));
   const [photos, setPhotos] = React.useState(existing?.photos || []);
+  const [files, setFiles]   = React.useState(existing?.files || []);
   const [confirmDelete, setConfirmDelete] = React.useState(false);
   const [saved, setSaved] = React.useState(false);
 
   const idRef    = React.useRef(existing?.id || null);
   const photosRef = React.useRef(photos);
   const itemsRef  = React.useRef(items);
+  const filesRef  = React.useRef(files);
   const bodyRef  = React.useRef(null);
-  const fileRef  = React.useRef(null);
+  const fileRef  = React.useRef(null);   // image picker
+  const docRef   = React.useRef(null);   // document picker
   const firstRun = React.useRef(true);
 
   React.useEffect(() => { photosRef.current = photos; }, [photos]);
   React.useEffect(() => { itemsRef.current = items; }, [items]);
+  React.useEffect(() => { filesRef.current = files; }, [files]);
 
   // Autofocus / auto-pick on fresh drafts
   React.useEffect(() => {
     if (!isDraft) return;
     if (pickNow && kind === 'photo') setTimeout(() => fileRef.current?.click(), 300);
+    else if (pickNow && kind === 'file') setTimeout(() => docRef.current?.click(), 300);
     else if (kind === 'text') setTimeout(() => bodyRef.current?.focus(), 300);
   }, []); // eslint-disable-line
 
   function autoTitle() {
-    return title.trim() || makeTitle(body) || { todo: 'Checklist', photo: 'Photos', voice: 'Voice note', text: 'Untitled note' }[kind];
+    return title.trim() || makeTitle(body) || { todo: 'Checklist', photo: 'Photos', voice: 'Voice note', file: 'Saved files', text: 'Untitled note' }[kind];
   }
 
   function flash() {
@@ -67,7 +72,7 @@ function Editor({ go, dark, existing, isDraft, initialKind, pickNow, addNote, up
 
   function ensureCreated() {
     if (idRef.current) return idRef.current;
-    const n = addNote({ kind, title: autoTitle(), text: body, items: itemsRef.current, photos: photosRef.current });
+    const n = addNote({ kind, title: autoTitle(), text: body, items: itemsRef.current, photos: photosRef.current, files: filesRef.current });
     idRef.current = n.id;
     return n.id;
   }
@@ -75,24 +80,24 @@ function Editor({ go, dark, existing, isDraft, initialKind, pickNow, addNote, up
   // Debounced autosave
   React.useEffect(() => {
     if (firstRun.current) { firstRun.current = false; return; }
-    const hasContent = title.trim() || body.trim() || items.some(i => i.text.trim()) || photos.length;
+    const hasContent = title.trim() || body.trim() || items.some(i => i.text.trim()) || photos.length || files.length;
     const t = setTimeout(() => {
       if (idRef.current) {
-        updateNote(idRef.current, { kind, title: autoTitle(), text: body, items, photos });
+        updateNote(idRef.current, { kind, title: autoTitle(), text: body, items, photos, files });
         flash();
       } else if (hasContent) {
-        const n = addNote({ kind, title: autoTitle(), text: body, items, photos });
+        const n = addNote({ kind, title: autoTitle(), text: body, items, photos, files });
         idRef.current = n.id;
         flash();
       }
     }, 500);
     return () => clearTimeout(t);
-  }, [title, body, items, photos]); // eslint-disable-line
+  }, [title, body, items, photos, files]); // eslint-disable-line
 
   function handleBack() {
-    const hasContent = title.trim() || body.trim() || items.some(i => i.text.trim()) || photos.length;
-    if (idRef.current) updateNote(idRef.current, { kind, title: autoTitle(), text: body, items, photos });
-    else if (hasContent) addNote({ kind, title: autoTitle(), text: body, items, photos });
+    const hasContent = title.trim() || body.trim() || items.some(i => i.text.trim()) || photos.length || files.length;
+    if (idRef.current) updateNote(idRef.current, { kind, title: autoTitle(), text: body, items, photos, files });
+    else if (hasContent) addNote({ kind, title: autoTitle(), text: body, items, photos, files });
     go('home');
   }
 
@@ -124,6 +129,37 @@ function Editor({ go, dark, existing, isDraft, initialKind, pickNow, addNote, up
     photosRef.current = next;
     setPhotos(next);
     if (idRef.current) updateNote(idRef.current, { photos: next });
+  }
+
+  // ── File handling ──
+  async function onDocs(e) {
+    const picked = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (!picked.length) return;
+    ensureCreated();
+    const added = [];
+    for (const f of picked) {
+      const fid = uuid();
+      if (await saveBlob(fid, f)) added.push({ id: fid, name: f.name, type: f.type || '', size: f.size || 0 });
+    }
+    const next = [...filesRef.current, ...added];
+    filesRef.current = next;
+    setFiles(next);
+    if (idRef.current) updateNote(idRef.current, { kind, files: next, title: autoTitle() });
+  }
+  function removeFile(fid) {
+    deleteBlob(fid);
+    const next = filesRef.current.filter(f => f.id !== fid);
+    filesRef.current = next;
+    setFiles(next);
+    if (idRef.current) updateNote(idRef.current, { files: next });
+  }
+  async function openFile(f) {
+    const blob = await loadBlob(f.id);
+    if (!blob) return;
+    const url = URL.createObjectURL(blob.type ? blob : new Blob([blob], { type: f.type || 'application/octet-stream' }));
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
   }
 
   // ── Todo handling ──
@@ -186,6 +222,23 @@ function Editor({ go, dark, existing, isDraft, initialKind, pickNow, addNote, up
           )}
           <input ref={fileRef} type="file" accept="image/*" multiple onChange={onFiles} style={{ display: 'none' }} />
 
+          {/* File attachments */}
+          {(kind === 'file' || files.length > 0) && (
+            <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {files.map(f => <FileRow key={f.id} file={f} onOpen={() => openFile(f)} onRemove={() => removeFile(f.id)} dark={dark} ink={ink} subInk={subInk} />)}
+              <button onClick={() => docRef.current?.click()} style={{
+                display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 14, cursor: 'pointer',
+                border: `1.5px dashed ${dark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.2)'}`,
+                background: dark ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.4)', color: subInk,
+                fontFamily: TYPE.ui, fontWeight: 600, fontSize: 14,
+              }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"/></svg>
+                Attach a file
+              </button>
+            </div>
+          )}
+          <input ref={docRef} type="file" multiple onChange={onDocs} style={{ display: 'none' }} />
+
           {/* Checklist */}
           {kind === 'todo' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -238,12 +291,12 @@ function Editor({ go, dark, existing, isDraft, initialKind, pickNow, addNote, up
             </div>
           )}
 
-          {/* Body — for text, voice, and photo caption */}
+          {/* Body — for text, voice, photo caption, file description */}
           {kind !== 'todo' && (
             <textarea
               ref={bodyRef} value={body} onChange={e => setBody(e.target.value)}
-              placeholder={kind === 'voice' ? 'Transcript — edit if needed…' : kind === 'photo' ? 'Add a caption…' : 'Start typing your note…'}
-              style={{ width: '100%', minHeight: kind === 'photo' ? 80 : 220, resize: 'none', border: 'none', outline: 'none', background: 'transparent', fontFamily: TYPE.ui, fontSize: 16, lineHeight: 1.7, color: ink, padding: 0, marginTop: (existing?.hasAudio || photos.length) ? 8 : 0 }}
+              placeholder={kind === 'voice' ? 'Transcript — edit if needed…' : kind === 'photo' ? 'Add a caption…' : kind === 'file' ? 'Add a description…' : 'Start typing your note…'}
+              style={{ width: '100%', minHeight: (kind === 'photo' || kind === 'file') ? 80 : 220, resize: 'none', border: 'none', outline: 'none', background: 'transparent', fontFamily: TYPE.ui, fontSize: 16, lineHeight: 1.7, color: ink, padding: 0, marginTop: (existing?.hasAudio || photos.length || files.length) ? 8 : 0 }}
             />
           )}
         </div>
@@ -257,7 +310,13 @@ function Editor({ go, dark, existing, isDraft, initialKind, pickNow, addNote, up
             Add photo
           </button>
         )}
-        {kind !== 'photo' && (
+        {kind === 'file' && (
+          <button onClick={() => docRef.current?.click()} style={{ flex: 1, padding: '14px', borderRadius: 18, border: 'none', cursor: 'pointer', background: dark ? 'rgba(220,120,170,0.25)' : 'rgba(220,120,170,0.16)', color: dark ? '#f3bcd9' : '#a8336f', fontFamily: TYPE.ui, fontWeight: 600, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M14 3v5h5M14 3l5 5v11a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/></svg>
+            Attach file
+          </button>
+        )}
+        {kind !== 'photo' && kind !== 'file' && (
           <button onClick={() => go('voice')} style={{ flex: 1, padding: '14px', borderRadius: 18, border: 'none', cursor: 'pointer', background: dark ? 'rgba(164,140,230,0.25)' : 'rgba(164,140,230,0.18)', color: dark ? '#d4c0ff' : '#5533aa', fontFamily: TYPE.ui, fontWeight: 600, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="9" y="3" width="6" height="12" rx="3" fill="currentColor"/><path d="M6 11a6 6 0 0 0 12 0M12 17v4" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"/></svg>
             New voice note
@@ -288,6 +347,37 @@ function PhotoTile({ id, onRemove, dark, hero = false }) {
     }}>
       <button onClick={onRemove} aria-label="Remove photo" style={{ position: 'absolute', top: 7, right: 7, width: 26, height: 26, borderRadius: 13, border: 'none', cursor: 'pointer', background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="#fff" strokeWidth="2.4" strokeLinecap="round"/></svg>
+      </button>
+    </div>
+  );
+}
+
+// ── File attachment row ───────────────────────────────────────────────────────
+function fileMeta(name = '', type = '') {
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  if (type.includes('pdf') || ext === 'pdf')                       return { label: 'PDF', color: '#d4453c', bg: 'rgba(212,69,60,0.14)' };
+  if (['doc', 'docx'].includes(ext) || type.includes('word'))     return { label: 'DOC', color: '#2a6fbf', bg: 'rgba(42,111,191,0.14)' };
+  if (['xls', 'xlsx', 'csv'].includes(ext) || type.includes('sheet')) return { label: 'XLS', color: '#2c8a68', bg: 'rgba(44,138,104,0.14)' };
+  if (['ppt', 'pptx'].includes(ext))                              return { label: 'PPT', color: '#d4843c', bg: 'rgba(212,132,60,0.14)' };
+  if (['zip', 'rar', '7z'].includes(ext))                         return { label: 'ZIP', color: '#8a7a3c', bg: 'rgba(138,122,60,0.14)' };
+  return { label: ext ? ext.slice(0, 4).toUpperCase() : 'FILE', color: '#7a6a8a', bg: 'rgba(122,106,138,0.14)' };
+}
+
+function FileRow({ file, onOpen, onRemove, dark, ink, subInk }) {
+  const m = fileMeta(file.name, file.type);
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 16, background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.6)', border: `0.75px solid ${dark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.85)'}` }}>
+      <button onClick={onOpen} style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0, border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left', padding: 0 }}>
+        <div style={{ width: 42, height: 42, borderRadius: 11, flexShrink: 0, background: m.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M14 3v5h5M14 3l5 5v11a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" stroke={m.color} strokeWidth="1.8" strokeLinejoin="round"/></svg>
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontFamily: TYPE.ui, fontWeight: 600, fontSize: 14, color: ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</div>
+          <div style={{ fontFamily: TYPE.mono, fontSize: 9.5, letterSpacing: 0.5, color: subInk, marginTop: 2 }}>{m.label}{file.size ? ` · ${fmtSize(file.size)}` : ''} · tap to open</div>
+        </div>
+      </button>
+      <button onClick={onRemove} aria-label="Remove file" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: subInk, padding: 4, flexShrink: 0, display: 'flex' }}>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
       </button>
     </div>
   );

@@ -28,7 +28,7 @@ export function makeTitle(text) {
 function defaultTitle(kind, text) {
   const t = makeTitle(text);
   if (t) return t;
-  return { todo: 'Checklist', photo: 'Photos', voice: 'Voice note', text: 'Untitled note' }[kind] || 'Untitled note';
+  return { todo: 'Checklist', photo: 'Photos', voice: 'Voice note', file: 'Saved files', text: 'Untitled note' }[kind] || 'Untitled note';
 }
 
 // Load + migrate older shapes (v2 used `transcript`/no kind richness; v1 even older)
@@ -45,6 +45,7 @@ function loadInitial() {
         text: n.text ?? n.transcript ?? '',
         items: Array.isArray(n.items) ? n.items : [],
         photos: Array.isArray(n.photos) ? n.photos : [],
+        files: Array.isArray(n.files) ? n.files : [],
         duration: n.duration || 0,
         hasAudio: !!n.hasAudio,
         tags: n.tags || [],
@@ -73,6 +74,7 @@ export function NotesProvider({ children }) {
       text: fields.text || '',
       items: fields.items || [],
       photos: fields.photos || [],
+      files: fields.files || [],
       duration: fields.duration || 0,
       hasAudio: !!fields.hasAudio,
       tags: fields.tags || [],
@@ -90,6 +92,7 @@ export function NotesProvider({ children }) {
     if (note) {
       if (note.hasAudio) deleteBlob(id);
       (note.photos || []).forEach(pid => deleteBlob(pid));
+      (note.files || []).forEach(f => deleteBlob(f.id));
     }
     dispatch({ type: 'DELETE', id });
   };
@@ -111,6 +114,13 @@ export function relativeTime(iso) {
   if (diff < 172800000) return 'yesterday';
   if (diff < 604800000) return `${Math.floor(diff / 86400000)}d ago`;
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+export function fmtSize(bytes) {
+  if (!bytes) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1048576) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / 1048576).toFixed(1)} MB`;
 }
 
 export function fmtDuration(s) {

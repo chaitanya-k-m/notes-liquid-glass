@@ -31,11 +31,13 @@ export function NewSheet({ dark = false, onClose, go }) {
     { key: 'todo',  label: 'Checklist',     sub: 'Tasks you can tick off', grad: 'linear-gradient(150deg,#6ec4a0,#2c8a68)', icon: <><path d="M4 6l2 2 3-3M4 13l2 2 3-3M4 20l2 2 3-3" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M12 6h8M12 13h8M12 20h8" stroke="#fff" strokeWidth="2" strokeLinecap="round"/></> },
     { key: 'photo', label: 'Photo note',    sub: 'Camera or gallery',   grad: 'linear-gradient(150deg,#5b9be6,#2a6fbf)', icon: <><rect x="3" y="6" width="18" height="14" rx="2" stroke="#fff" strokeWidth="2"/><circle cx="12" cy="13" r="3.2" stroke="#fff" strokeWidth="2"/><path d="M8 6l1.5-2h5L16 6" stroke="#fff" strokeWidth="2" strokeLinejoin="round"/></> },
     { key: 'voice', label: 'Voice note',    sub: 'Record & transcribe', grad: 'linear-gradient(150deg,#b490f0,#6644b8)', icon: <><rect x="9" y="3" width="6" height="12" rx="3" fill="#fff"/><path d="M6 11a6 6 0 0 0 12 0M12 17v4" stroke="#fff" strokeWidth="2" strokeLinecap="round"/></> },
+    { key: 'file',  label: 'Attach a file', sub: 'PDFs, docs & more',    grad: 'linear-gradient(150deg,#e08aa0,#c4567f)', icon: <path d="M14 3v5h5M14 3l5 5v11a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" stroke="#fff" strokeWidth="1.8" strokeLinejoin="round"/> },
   ];
 
   const pick = (key) => {
     if (key === 'voice') go('voice');
     else if (key === 'photo') go('detail', { draft: true, kind: 'photo', pickNow: true });
+    else if (key === 'file') go('detail', { draft: true, kind: 'file', pickNow: true });
     else go('detail', { draft: true, kind: key });
   };
 
