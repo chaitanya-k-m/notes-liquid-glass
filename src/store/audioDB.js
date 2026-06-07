@@ -1,8 +1,8 @@
-// Minimal IndexedDB wrapper for storing audio blobs by note id.
-// localStorage can't hold binary efficiently, so audio lives here.
+// Generic IndexedDB blob store — used for both audio recordings and photos.
+// Each blob is keyed by a unique id (note id for audio, photo id for images).
 
-const DB_NAME = 'notes_audio';
-const STORE = 'clips';
+const DB_NAME = 'notes_media';
+const STORE = 'blobs';
 const VERSION = 1;
 
 let dbPromise = null;
@@ -21,12 +21,12 @@ function getDB() {
   return dbPromise;
 }
 
-export async function saveAudio(id, blob) {
+export async function saveBlob(key, blob) {
   try {
     const db = await getDB();
     await new Promise((resolve, reject) => {
       const tx = db.transaction(STORE, 'readwrite');
-      tx.objectStore(STORE).put(blob, id);
+      tx.objectStore(STORE).put(blob, key);
       tx.oncomplete = resolve;
       tx.onerror = () => reject(tx.error);
     });
@@ -34,26 +34,31 @@ export async function saveAudio(id, blob) {
   } catch { return false; }
 }
 
-export async function loadAudio(id) {
+export async function loadBlob(key) {
   try {
     const db = await getDB();
     return await new Promise((resolve, reject) => {
       const tx = db.transaction(STORE, 'readonly');
-      const req = tx.objectStore(STORE).get(id);
+      const req = tx.objectStore(STORE).get(key);
       req.onsuccess = () => resolve(req.result || null);
       req.onerror = () => reject(req.error);
     });
   } catch { return null; }
 }
 
-export async function deleteAudio(id) {
+export async function deleteBlob(key) {
   try {
     const db = await getDB();
     await new Promise((resolve) => {
       const tx = db.transaction(STORE, 'readwrite');
-      tx.objectStore(STORE).delete(id);
+      tx.objectStore(STORE).delete(key);
       tx.oncomplete = resolve;
       tx.onerror = resolve;
     });
   } catch { /* ignore */ }
 }
+
+// Back-compat aliases
+export const saveAudio = saveBlob;
+export const loadAudio = loadBlob;
+export const deleteAudio = deleteBlob;

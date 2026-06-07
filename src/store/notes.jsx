@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import { deleteAudio } from './audioDB.js';
+import { deleteBlob } from './audioDB.js';
 
 const Ctx = createContext(null);
-const STORAGE_KEY = 'notes_v2';
+const STORAGE_KEY = 'notes_v3';
 
 function reducer(state, action) {
   switch (action.type) {
@@ -13,40 +13,47 @@ function reducer(state, action) {
   }
 }
 
+export function uuid() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+  return 'n_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
 export function makeTitle(text) {
-  if (!text?.trim()) {
-    return 'Untitled note';
-  }
+  if (!text?.trim()) return '';
   const first = text.trim().split(/[.!?\n]/)[0].trim();
   if (first.length <= 52) return first;
   return first.split(' ').slice(0, 8).join(' ') + '…';
 }
 
-function uuid() {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
-  return 'n_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+function defaultTitle(kind, text) {
+  const t = makeTitle(text);
+  if (t) return t;
+  return { todo: 'Checklist', photo: 'Photos', voice: 'Voice note', text: 'Untitled note' }[kind] || 'Untitled note';
 }
 
-// Load + migrate from any older shape (notes_v1 used `transcript`)
+// Load + migrate older shapes (v2 used `transcript`/no kind richness; v1 even older)
 function loadInitial() {
-  try {
-    const v2 = localStorage.getItem(STORAGE_KEY);
-    if (v2) return JSON.parse(v2);
-  } catch { /* fall through */ }
-  try {
-    const v1 = JSON.parse(localStorage.getItem('notes_v1') || '[]');
-    return v1.map(n => ({
-      id: n.id || uuid(),
-      kind: n.kind || (n.duration ? 'voice' : 'text'),
-      title: n.title || makeTitle(n.text ?? n.transcript ?? ''),
-      text: n.text ?? n.transcript ?? '',
-      duration: n.duration || 0,
-      hasAudio: false, // v1 never stored audio
-      tags: n.tags || [],
-      createdAt: n.createdAt || new Date().toISOString(),
-      updatedAt: n.updatedAt || n.createdAt || new Date().toISOString(),
-    }));
-  } catch { return []; }
+  for (const key of [STORAGE_KEY, 'notes_v2', 'notes_v1']) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const arr = JSON.parse(raw);
+      return arr.map(n => ({
+        id: n.id || uuid(),
+        kind: n.kind || (n.duration ? 'voice' : 'text'),
+        title: n.title || '',
+        text: n.text ?? n.transcript ?? '',
+        items: Array.isArray(n.items) ? n.items : [],
+        photos: Array.isArray(n.photos) ? n.photos : [],
+        duration: n.duration || 0,
+        hasAudio: !!n.hasAudio,
+        tags: n.tags || [],
+        createdAt: n.createdAt || new Date().toISOString(),
+        updatedAt: n.updatedAt || n.createdAt || new Date().toISOString(),
+      }));
+    } catch { /* try next */ }
+  }
+  return [];
 }
 
 export function NotesProvider({ children }) {
@@ -58,11 +65,14 @@ export function NotesProvider({ children }) {
 
   const addNote = (fields = {}) => {
     const now = new Date().toISOString();
+    const kind = fields.kind || 'text';
     const note = {
       id: uuid(),
-      kind: fields.kind || 'text',
-      title: (fields.title && fields.title.trim()) || makeTitle(fields.text),
+      kind,
+      title: (fields.title && fields.title.trim()) || defaultTitle(kind, fields.text),
       text: fields.text || '',
+      items: fields.items || [],
+      photos: fields.photos || [],
       duration: fields.duration || 0,
       hasAudio: !!fields.hasAudio,
       tags: fields.tags || [],
@@ -76,7 +86,11 @@ export function NotesProvider({ children }) {
   const updateNote = (id, updates) => dispatch({ type: 'UPDATE', id, updates });
 
   const deleteNote = (id) => {
-    deleteAudio(id);          // clean up any stored audio
+    const note = notes.find(n => n.id === id);
+    if (note) {
+      if (note.hasAudio) deleteBlob(id);
+      (note.photos || []).forEach(pid => deleteBlob(pid));
+    }
     dispatch({ type: 'DELETE', id });
   };
 

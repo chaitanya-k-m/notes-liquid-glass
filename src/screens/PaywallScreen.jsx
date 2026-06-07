@@ -2,21 +2,22 @@ import React from 'react';
 import { TYPE, NotesMark } from '../design-system.jsx';
 import { CircleBtn } from '../components/ScreensCommon.jsx';
 
-export function PaywallScreen({ go, dark = false }) {
+export function PaywallScreen({ go, dark = false, pro = false, setPro }) {
   const [plan, setPlan] = React.useState('yearly');
+  const activate = () => { setPro?.(true); go('settings'); };
 
   const features = [
-    { kind: 'voice',  title: 'Unlimited voice notes',        sub: "You're at 9 of 10 this month" },
+    { kind: 'voice',  title: 'Unlimited voice notes',        sub: 'Record without limits' },
     { kind: 'search', title: 'Ask anything, in your words',  sub: 'Natural-language search across everything' },
     { kind: 'sync',   title: 'Sync across all your devices', sub: 'Phone, tablet, web — instantly' },
     { kind: 'export', title: 'Export to PDF & Markdown',     sub: 'Take your notes anywhere' },
   ];
 
   return (
-    <div style={{ position: 'relative', width: '100%' }}>
+    <div style={{ position: 'relative', width: '100%', flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 22px 0' }}>
         <NotesMark size={28} dark={dark} />
-        <CircleBtn dark={dark} onClick={() => go('home')}>
+        <CircleBtn dark={dark} onClick={() => go('settings')}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
             <path d="M6 6l12 12M18 6L6 18" stroke={dark ? '#fff' : '#222'} strokeWidth="2.2" strokeLinecap="round"/>
           </svg>
@@ -110,14 +111,14 @@ export function PaywallScreen({ go, dark = false }) {
 
       {/* CTA */}
       <div style={{ padding: '18px 22px 30px' }}>
-        <button onClick={() => go('home')} style={{
+        <button onClick={activate} style={{
           width: '100%', padding: '16px 24px', borderRadius: 9999, border: 'none', cursor: 'pointer',
-          background: 'linear-gradient(160deg, #2a1a40, #1a1322)',
+          background: pro ? 'linear-gradient(160deg, #2c8a68, #1f6b4f)' : 'linear-gradient(160deg, #2a1a40, #1a1322)',
           color: '#fff', fontFamily: TYPE.ui, fontWeight: 600, fontSize: 15,
           boxShadow: '0 6px 20px rgba(40,20,60,0.4), inset 0 1px 0 rgba(255,255,255,0.18)',
           letterSpacing: 0.2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
         }}>
-          Start 7-day free trial
+          {pro ? 'You’re on Pro ✦' : 'Start 7-day free trial'}
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
             <path d="M5 12h14M13 6l6 6-6 6" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
