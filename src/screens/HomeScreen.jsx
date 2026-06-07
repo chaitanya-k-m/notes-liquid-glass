@@ -31,7 +31,7 @@ export function HomeScreen({ go, openNew }) {
     if (tab === 'To-Do')  return n.kind === 'todo';
     if (tab === 'Photos') return n.kind === 'photo' || (n.photos && n.photos.length > 0);
     if (tab === 'Files')  return n.kind === 'file' || (n.files && n.files.length > 0);
-    return n.pinned; // Pinned tab
+    return n.pinned || n.kind === 'todo'; // Pinned tab: pinned notes + all checklists
   });
 
   const allPhotos = notes.flatMap(n => (n.photos || []).map(pid => ({ pid, noteId: n.id })));
@@ -331,7 +331,7 @@ function EmptyState({ dark, tab, openNew, go, ink, subInk }) {
       </div>
       <div style={{ fontFamily: TYPE.ui, fontSize: 14, lineHeight: 1.5, color: subInk, maxWidth: 260, marginBottom: 18 }}>
         {isPinned
-          ? 'Pin a note (tap the 📌 on any card, or open it and tap Pin) to keep it on your home screen. Browse everything with the tabs above.'
+          ? 'Checklists show here automatically. Pin any other note (tap the 📌 on a card, or open it and tap Pin) to keep it here too.'
           : 'Write, make a checklist, snap a photo, or speak it out loud.'}
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
