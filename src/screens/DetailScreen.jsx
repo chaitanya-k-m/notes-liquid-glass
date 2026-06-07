@@ -2,6 +2,7 @@ import React from 'react';
 import { TYPE, GlassCard } from '../design-system.jsx';
 import { ScreenHeader } from '../components/ScreensCommon.jsx';
 import { useNotes, makeTitle, uuid, relativeTime, fmtDuration } from '../store/notes.jsx';
+import { useTheme } from '../store/theme.jsx';
 import { loadBlob, saveBlob, deleteBlob } from '../store/audioDB.js';
 
 export function DetailScreen({ go, dark = false, payload }) {
@@ -25,6 +26,7 @@ export function DetailScreen({ go, dark = false, payload }) {
 }
 
 function Editor({ go, dark, existing, isDraft, initialKind, pickNow, addNote, updateNote, deleteNote }) {
+  const { accent } = useTheme();
   const ink    = dark ? '#fff' : '#1a1322';
   const subInk = dark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.48)';
   const kind = existing?.kind || initialKind;
@@ -159,11 +161,14 @@ function Editor({ go, dark, existing, isDraft, initialKind, pickNow, addNote, up
           {/* Voice audio player */}
           {existing?.hasAudio && <AudioPlayer noteId={existing.id} duration={existing.duration} dark={dark} />}
 
-          {/* Photo grid */}
+          {/* Photo gallery — first image as hero, rest in a grid */}
           {(kind === 'photo' || photos.length > 0) && (
             <div style={{ marginBottom: 16 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-                {photos.map(pid => <PhotoTile key={pid} id={pid} onRemove={() => removePhoto(pid)} dark={dark} />)}
+              {photos.length > 0 && (
+                <PhotoTile id={photos[0]} onRemove={() => removePhoto(photos[0])} dark={dark} hero />
+              )}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginTop: photos.length > 0 ? 8 : 0 }}>
+                {photos.slice(1).map(pid => <PhotoTile key={pid} id={pid} onRemove={() => removePhoto(pid)} dark={dark} />)}
                 <button onClick={() => fileRef.current?.click()} style={{
                   aspectRatio: '1', borderRadius: 14, cursor: 'pointer',
                   border: `1.5px dashed ${dark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.2)'}`,
@@ -181,13 +186,28 @@ function Editor({ go, dark, existing, isDraft, initialKind, pickNow, addNote, up
           {/* Checklist */}
           {kind === 'todo' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {items.length > 0 && (() => {
+                const done = items.filter(i => i.done).length;
+                const pct = (done / items.length) * 100;
+                return (
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <span style={{ fontFamily: TYPE.mono, fontSize: 9.5, letterSpacing: 1, textTransform: 'uppercase', color: subInk }}>Progress</span>
+                      <span style={{ fontFamily: TYPE.mono, fontSize: 9.5, color: pct === 100 ? accent : subInk }}>{done}/{items.length}{pct === 100 ? ' ✓' : ''}</span>
+                    </div>
+                    <div style={{ height: 6, borderRadius: 3, background: dark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.08)', overflow: 'hidden' }}>
+                      <div style={{ width: `${pct}%`, height: '100%', background: accent, borderRadius: 3, transition: 'width 0.3s' }} />
+                    </div>
+                  </div>
+                );
+              })()}
               {items.map(it => (
                 <div key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0' }}>
                   <button onClick={() => toggleItem(it.id)} style={{
                     width: 22, height: 22, borderRadius: 7, flexShrink: 0, cursor: 'pointer', padding: 0,
-                    border: `1.5px solid ${it.done ? '#2c8a68' : (dark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.3)')}`,
-                    background: it.done ? '#2c8a68' : 'transparent',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    border: `1.5px solid ${it.done ? accent : (dark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.3)')}`,
+                    background: it.done ? accent : 'transparent',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s',
                   }}>
                     {it.done && <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/></svg>}
                   </button>
@@ -246,7 +266,7 @@ function Editor({ go, dark, existing, isDraft, initialKind, pickNow, addNote, up
 }
 
 // ── Photo tile with remove ────────────────────────────────────────────────────
-function PhotoTile({ id, onRemove, dark }) {
+function PhotoTile({ id, onRemove, dark, hero = false }) {
   const [url, setUrl] = React.useState(null);
   React.useEffect(() => {
     let revoked = false, obj;
@@ -254,9 +274,14 @@ function PhotoTile({ id, onRemove, dark }) {
     return () => { revoked = true; if (obj) URL.revokeObjectURL(obj); };
   }, [id]);
   return (
-    <div style={{ position: 'relative', aspectRatio: '1', borderRadius: 14, overflow: 'hidden', background: url ? `center/cover no-repeat url(${url})` : 'rgba(120,100,140,0.15)' }}>
-      <button onClick={onRemove} style={{ position: 'absolute', top: 5, right: 5, width: 24, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer', background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="#fff" strokeWidth="2.4" strokeLinecap="round"/></svg>
+    <div style={{
+      position: 'relative', borderRadius: hero ? 18 : 14, overflow: 'hidden',
+      aspectRatio: hero ? '16 / 11' : '1', width: '100%',
+      background: url ? `center/cover no-repeat url(${url})` : 'rgba(120,100,140,0.15)',
+      boxShadow: hero ? '0 6px 20px rgba(60,40,80,0.18)' : 'none',
+    }}>
+      <button onClick={onRemove} aria-label="Remove photo" style={{ position: 'absolute', top: 7, right: 7, width: 26, height: 26, borderRadius: 13, border: 'none', cursor: 'pointer', background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="#fff" strokeWidth="2.4" strokeLinecap="round"/></svg>
       </button>
     </div>
   );
