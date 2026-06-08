@@ -37,6 +37,16 @@ function Shell() {
   }, []);
   const openNew = React.useCallback(() => setSheet(true), []);
 
+  // Handle PWA manifest shortcuts (?action=voice|write)
+  React.useEffect(() => {
+    try {
+      const action = new URLSearchParams(window.location.search).get('action');
+      if (action === 'voice') go('voice');
+      else if (action === 'write') go('detail', { draft: true, kind: 'text' });
+      if (action) window.history.replaceState({}, '', window.location.pathname);
+    } catch {}
+  }, [go]);
+
   const ScreenComp = SCREENS[screen] || HomeScreen;
   const props = { go, payload, dark, openNew, pro, setPro };
 

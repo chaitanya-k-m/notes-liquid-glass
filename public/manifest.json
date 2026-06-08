@@ -1,10 +1,25 @@
 {
-  "name": "Notes",
+  "id": "/",
+  "name": "Notes — liquid glass",
   "short_name": "Notes",
-  "description": "Voice notes with liquid glass",
+  "description": "Voice notes, checklists, photos and files with on-device AI search. Think out loud, find anything.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#f0e4d0",
   "theme_color": "#f0e4d0",
-  "orientation": "portrait-primary"
+  "categories": ["productivity", "utilities", "lifestyle"],
+  "dir": "ltr",
+  "lang": "en",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "New voice note", "short_name": "Record", "url": "/?action=voice", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "New note", "short_name": "Write", "url": "/?action=write", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
+  ]
 }
