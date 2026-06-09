@@ -25,19 +25,20 @@ jobs:
           yes | sdkmanager --licenses >/dev/null 2>&1 || true
           sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" "build-tools;35.0.0"
       - run: npm ci
-      - run: npm run build
-      - run: npx cap sync android
-      - name: Assemble debug APK
+      - name: Build (web + sync + gradle)
         run: |
-          cd android
-          chmod +x gradlew
           set +e
-          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee /tmp/gradle.log
+          (
+            set -e
+            echo "::group::npm run build"; npm run build; echo "::endgroup::"
+            echo "::group::cap sync";       npx cap sync android; echo "::endgroup::"
+            echo "::group::gradle";         (cd android && chmod +x gradlew && ./gradlew assembleDebug --no-daemon --stacktrace); echo "::endgroup::"
+          ) 2>&1 | tee /tmp/build.log
           code=${PIPESTATUS[0]}
-          if [ $code -ne 0 ]; then
-            msg=$(grep -nE "FAILURE:|What went wrong|Caused by|error:|not been accepted|not found|Could not|No such|Unsupported|requires|^> " /tmp/gradle.log | tail -60 | sed 's/%/%25/g; s/\r//g')
+          if [ "$code" -ne 0 ]; then
+            msg=$(tail -60 /tmp/build.log | sed 's/%/%25/g; s/\r//g')
             msg="${msg//$'\n'/%0A}"
-            echo "::error::GRADLE FAILED%0A${msg}"
+            echo "::error::BUILD FAILED (exit $code)%0A${msg}"
           fi
           exit $code
       - uses: actions/upload-artifact@v4
