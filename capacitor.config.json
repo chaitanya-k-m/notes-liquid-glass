@@ -1,0 +1,11 @@
+{
+  "appId": "app.vercel.notes_liquid_glass.twa",
+  "appName": "Notes",
+  "webDir": "dist",
+  "android": {
+    "allowMixedContent": false
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}
