@@ -4,6 +4,7 @@ import { ScreenHeader, CircleBtn } from '../components/ScreensCommon.jsx';
 import { useNotes } from '../store/notes.jsx';
 import { useTheme } from '../store/theme.jsx';
 import { saveAudio } from '../store/audioDB.js';
+import { transcribeBlob } from '../store/transcribe.js';
 
 function pickMime() {
   if (typeof MediaRecorder === 'undefined') return null;
@@ -18,7 +19,8 @@ export function VoiceScreen({ go, dark = false }) {
   const { addNote } = useNotes();
   const { accent } = useTheme();
 
-  const [phase, setPhase]             = React.useState('idle'); // idle | recording | saving
+  const [phase, setPhase]             = React.useState('idle'); // idle | recording | saving | transcribing
+  const [transStatus, setTransStatus] = React.useState(null);   // { phase:'loading'|'working', value:0..1 }
   const [seconds, setSeconds]         = React.useState(0);
   const [transcript, setTranscript]   = React.useState('');
   const [interimText, setInterimText] = React.useState('');
@@ -164,12 +166,21 @@ export function VoiceScreen({ go, dark = false }) {
     // Nothing captured at all → just go back
     if (!finalText && !blob && dur === 0) { go('home'); return; }
 
-    const note = addNote({ kind: 'voice', text: finalText, duration: dur, hasAudio: !!blob });
+    // No live transcript (native WebView has no Web Speech API) → transcribe the
+    // recorded clip on-device. Audio is still saved regardless of the result.
+    let text = finalText;
+    if (!hasSpeechAPI && blob) {
+      setPhase('transcribing');
+      setTransStatus({ phase: 'loading', value: 0 });
+      text = await transcribeBlob(blob, (p, v) => setTransStatus({ phase: p, value: v ?? 0 }));
+    }
+
+    const note = addNote({ kind: 'voice', text, duration: dur, hasAudio: !!blob });
     if (blob) await saveAudio(note.id, blob);
     go('detail', { noteId: note.id });
   }
 
-  function discard() { cleanup(); go('home'); }
+  function discard() { if (phase === 'transcribing' || phase === 'saving') return; cleanup(); go('home'); }
 
   const fmt = (n) => `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`;
   const displayTranscript = transcript + (interimText ? (transcript ? ' ' : '') + interimText : '');
@@ -185,7 +196,7 @@ export function VoiceScreen({ go, dark = false }) {
             <div style={{ fontSize: 40, marginBottom: 16 }}>🎙️</div>
             <div style={{ fontFamily: TYPE.ui, fontWeight: 600, fontSize: 16, color: dark ? '#fff' : '#1a1322', marginBottom: 8 }}>Microphone blocked</div>
             <div style={{ fontFamily: TYPE.ui, fontSize: 13.5, lineHeight: 1.55, color: dark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)' }}>
-              Allow microphone access in your browser settings, then reload and try again.
+              Allow microphone access for this app in your device settings, then try again.
             </div>
             <button onClick={() => go('home')} style={{ marginTop: 20, padding: '12px 24px', borderRadius: 9999, border: 'none', cursor: 'pointer', background: 'rgba(40,30,55,0.9)', color: '#fff', fontFamily: TYPE.ui, fontWeight: 600, fontSize: 14 }}>Back</button>
           </div>
@@ -200,7 +211,7 @@ export function VoiceScreen({ go, dark = false }) {
         <ScreenHeader
           dark={dark}
           back={discard}
-          eyebrow={recording ? '● recording' : phase === 'saving' ? 'saving…' : 'Tap the mic to start'}
+          eyebrow={recording ? '● recording' : phase === 'transcribing' ? 'transcribing…' : phase === 'saving' ? 'saving…' : 'Tap the mic to start'}
         />
 
         <div style={{ position: 'relative', padding: '8px 0 0', textAlign: 'center' }}>
@@ -221,10 +232,27 @@ export function VoiceScreen({ go, dark = false }) {
             <Waveform color={dark ? '#fff' : '#2a1a40'} bars={38} active={recording} height={48} levels={recording ? levels : null} />
           </div>
           <div style={{ fontFamily: TYPE.serif, fontStyle: 'italic', fontSize: 15, lineHeight: 1.3, color: dark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.55)', padding: '0 32px', marginBottom: 16 }}>
-            {hasSpeechAPI
-              ? 'Speak naturally — your words appear below in real time.'
-              : 'Your audio is recorded and saved. (Live transcription isn’t supported in this browser.)'}
+            {phase === 'transcribing'
+              ? (transStatus?.phase === 'loading'
+                  ? `Preparing the speech model… ${Math.round((transStatus.value || 0) * 100)}%`
+                  : 'Transcribing your note…')
+              : hasSpeechAPI
+                ? 'Speak naturally — your words appear below in real time.'
+                : 'Your audio is saved, then transcribed automatically when you stop.'}
           </div>
+
+          {phase === 'transcribing' && (
+            <div style={{ padding: '0 24px 8px' }}>
+              <GlassCard radius={18} padding={18} tint={dark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.65)'}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'center' }}>
+                  <span style={{ width: 18, height: 18, borderRadius: '50%', border: `2.5px solid ${dark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.15)'}`, borderTopColor: accent, display: 'inline-block', animation: 'vSpin 0.8s linear infinite' }} />
+                  <span style={{ fontFamily: TYPE.ui, fontSize: 13.5, color: dark ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.6)' }}>
+                    {transStatus?.phase === 'loading' ? 'First time may take a moment to download the model.' : 'Converting your voice to text on-device.'}
+                  </span>
+                </div>
+              </GlassCard>
+            </div>
+          )}
         </div>
 
         {hasSpeechAPI && (
@@ -255,13 +283,13 @@ export function VoiceScreen({ go, dark = false }) {
 
         <button
           onClick={() => { navigator.vibrate?.(10); recording ? stopAndSave() : startRecording(); }}
-          disabled={phase === 'saving'}
+          disabled={phase === 'saving' || phase === 'transcribing'}
           style={{
             width: 80, height: 80, borderRadius: 40, border: 'none', cursor: 'pointer',
             background: recording ? 'radial-gradient(circle at 30% 30%, #ff8a6b, #d24a3f)' : 'radial-gradient(circle at 30% 30%, #b490f0, #6644b8)',
             boxShadow: recording ? '0 8px 26px rgba(210,74,63,0.45), inset 0 2px 0 rgba(255,255,255,0.25)' : '0 8px 26px rgba(102,68,184,0.45), inset 0 2px 0 rgba(255,255,255,0.3)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            opacity: phase === 'saving' ? 0.6 : 1, transition: 'transform 0.1s',
+            opacity: (phase === 'saving' || phase === 'transcribing') ? 0.6 : 1, transition: 'transform 0.1s',
           }}
           onTouchStart={e => e.currentTarget.style.transform = 'scale(0.94)'}
           onTouchEnd={e => e.currentTarget.style.transform = 'scale(1)'}
@@ -281,6 +309,7 @@ export function VoiceScreen({ go, dark = false }) {
       <style>{`
         @keyframes vBreathe { from{transform:translateX(-50%) scale(0.88);opacity:0.6} to{transform:translateX(-50%) scale(1.1);opacity:1} }
         @keyframes caretBlink { 50%{opacity:0} }
+        @keyframes vSpin { to { transform: rotate(360deg); } }
       `}</style>
     </div>
   );

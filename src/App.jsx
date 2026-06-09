@@ -8,6 +8,7 @@ import { VoiceScreen }   from './screens/VoiceScreen.jsx';
 import { SearchScreen }  from './screens/SearchScreen.jsx';
 import { SettingsScreen } from './screens/SettingsScreen.jsx';
 import { PaywallScreen } from './screens/PaywallScreen.jsx';
+import { OnboardingScreen } from './screens/OnboardingScreen.jsx';
 
 const SCREENS = {
   home: HomeScreen, detail: DetailScreen, voice: VoiceScreen,
@@ -22,9 +23,18 @@ function usePro() {
   return [pro, setPro];
 }
 
+function useOnboarded() {
+  const [done, setDone] = React.useState(() => {
+    try { return localStorage.getItem('onboarded_v1') === '1'; } catch { return false; }
+  });
+  const finish = () => { try { localStorage.setItem('onboarded_v1', '1'); } catch {} setDone(true); };
+  return [done, finish];
+}
+
 function Shell() {
-  const { gradient, dark } = useTheme();
+  const { gradient, dark, accent } = useTheme();
   const [pro, setPro] = usePro();
+  const [onboarded, finishOnboarding] = useOnboarded();
   const [screen, setScreen]   = React.useState('home');
   const [payload, setPayload] = React.useState(null);
   const [dir, setDir]         = React.useState('forward');
@@ -73,6 +83,8 @@ function Shell() {
       </div>
 
       {sheet && <NewSheet dark={dark} onClose={() => setSheet(false)} go={go} />}
+
+      {!onboarded && <OnboardingScreen dark={dark} accent={accent} gradient={gradient} onDone={finishOnboarding} />}
     </div>
   );
 }
