@@ -4,8 +4,6 @@ import { ScreenHeader, CircleBtn } from '../components/ScreensCommon.jsx';
 import { useNotes } from '../store/notes.jsx';
 import { useTheme } from '../store/theme.jsx';
 import { saveAudio } from '../store/audioDB.js';
-import { transcribeBlob } from '../store/transcribe.js';
-import { isNativeSpeech, speechAvailable, ensureSpeechPermission, startSpeechSession } from '../speech.js';
 
 function pickMime() {
   if (typeof MediaRecorder === 'undefined') return null;
@@ -16,30 +14,30 @@ function pickMime() {
   return '';
 }
 
+const isNativeApp = (() => {
+  try { return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); }
+  catch { return false; }
+})();
+
 export function VoiceScreen({ go, dark = false }) {
   const { addNote } = useNotes();
   const { accent } = useTheme();
 
-  const [phase, setPhase]             = React.useState('idle'); // idle | recording | saving | transcribing
-  const [transStatus, setTransStatus] = React.useState(null);   // { phase:'loading'|'working', value:0..1 }
+  const [phase, setPhase]             = React.useState('idle'); // idle | recording | saving
   const [seconds, setSeconds]         = React.useState(0);
   const [transcript, setTranscript]   = React.useState('');
   const [interimText, setInterimText] = React.useState('');
   const [levels, setLevels]           = React.useState(null);
   const [permissionDenied, setPermissionDenied] = React.useState(false);
-  const [speechUnavailable, setSpeechUnavailable] = React.useState(false);
-  // Native app → the OS speech engine (live, instant, no download). Web → the Web
-  // Speech API where it actually works (desktop Chrome); otherwise on-device
-  // Whisper after recording.
-  const isNative = isNativeSpeech;
-  const [webHasSpeech] = React.useState(() => {
-    if (isNativeSpeech || typeof window === 'undefined') return false;
-    return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
-  });
-  const useLive = isNative || webHasSpeech;
 
-  const nativeSpeechRef    = React.useRef(null);
-  const vizTimerRef        = React.useRef(null);
+  // Transcription via the Web Speech API — the same mechanism the Search screen
+  // uses, which works in the Android WebView. On the native app we DON'T also run
+  // MediaRecorder (the recognizer needs the mic), so a voice note saves text only.
+  // On the web build we additionally record the audio clip for playback.
+  const hasSpeech = typeof window !== 'undefined' && !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+  const recordAudio = !isNativeApp;
+  const supported = hasSpeech || recordAudio;
+
   const recognitionRef     = React.useRef(null);
   const mediaStreamRef     = React.useRef(null);
   const mediaRecorderRef   = React.useRef(null);
@@ -47,6 +45,7 @@ export function VoiceScreen({ go, dark = false }) {
   const audioCtxRef        = React.useRef(null);
   const animFrameRef       = React.useRef(null);
   const timerRef           = React.useRef(null);
+  const vizTimerRef        = React.useRef(null);
   const savedTranscriptRef = React.useRef('');
   const secondsRef         = React.useRef(0);
   const stoppingRef        = React.useRef(false);
@@ -58,7 +57,6 @@ export function VoiceScreen({ go, dark = false }) {
     clearInterval(timerRef.current);
     clearInterval(vizTimerRef.current);
     cancelAnimationFrame(animFrameRef.current);
-    if (nativeSpeechRef.current) { try { nativeSpeechRef.current.stop(); } catch {} nativeSpeechRef.current = null; }
     if (recognitionRef.current) { try { recognitionRef.current.stop(); } catch {} recognitionRef.current = null; }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       try { mediaRecorderRef.current.stop(); } catch {}
@@ -86,79 +84,70 @@ export function VoiceScreen({ go, dark = false }) {
     } catch { /* viz is optional */ }
   }
 
-  // Native: live dictation via the OS speech engine. No getUserMedia / MediaRecorder
-  // (the recognizer needs exclusive mic access), so the note saves text only.
-  async function startNativeRecording() {
-    const ok = await ensureSpeechPermission();
-    if (!ok) { setPermissionDenied(true); return; }
-    if (!(await speechAvailable())) { setSpeechUnavailable(true); return; }
-
-    setPhase('recording');
-    setSeconds(0);
-    setTranscript('');
-    setInterimText('');
-    savedTranscriptRef.current = '';
-    stoppingRef.current = false;
-    timerRef.current = setInterval(() => setSeconds(s => s + 1), 1000);
-    // Gentle animated waveform (we have no audio analyser on this path).
+  // A gentle animated waveform when we have no audio analyser (native path).
+  function startFakeViz() {
     let ph = 0;
     vizTimerRef.current = setInterval(() => {
       ph += 0.3;
       setLevels(Array.from({ length: 38 }, (_, i) => 0.22 + 0.5 * Math.abs(Math.sin(ph + i * 0.35))));
     }, 90);
-
-    try {
-      nativeSpeechRef.current = await startSpeechSession({
-        language: navigator.language || 'en-US',
-        onText: (t) => { savedTranscriptRef.current = t; setTranscript(t); },
-      });
-    } catch {
-      clearInterval(timerRef.current);
-      clearInterval(vizTimerRef.current);
-      setLevels(null);
-      setPhase('idle');
-      setSpeechUnavailable(true);
-    }
   }
 
-  async function stopNativeAndSave() {
-    stoppingRef.current = true;
-    setPhase('saving');
-    clearInterval(timerRef.current);
-    clearInterval(vizTimerRef.current);
-    setLevels(null);
-    const dur = secondsRef.current;
-    let text = savedTranscriptRef.current || '';
-    try { if (nativeSpeechRef.current) text = (await nativeSpeechRef.current.stop()) || text; } catch { /* ignore */ }
-    nativeSpeechRef.current = null;
-    text = (text || '').trim();
-    if (!text && dur === 0) { go('home'); return; }
-    const note = addNote({ kind: 'voice', text, duration: dur, hasAudio: false });
-    go('detail', { noteId: note.id });
+  function startSpeech() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return;
+    const rec = new SR();
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.lang = navigator.language || 'en-US';
+    recognitionRef.current = rec;
+    rec.onresult = (e) => {
+      let interim = '';
+      let final = savedTranscriptRef.current;
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const txt = e.results[i][0].transcript;
+        if (e.results[i].isFinal) {
+          final += (final ? ' ' : '') + txt.trim();
+          savedTranscriptRef.current = final;
+          setTranscript(final);
+          setInterimText('');
+        } else { interim += txt; }
+      }
+      if (interim) setInterimText(interim);
+    };
+    rec.onerror = (e) => { if (e.error === 'not-allowed' || e.error === 'service-not-allowed') setPermissionDenied(true); };
+    // Android's recognizer auto-stops on silence — restart for continuous dictation.
+    rec.onend = () => { if (recognitionRef.current && !stoppingRef.current) { try { rec.start(); } catch {} } };
+    try { rec.start(); } catch { /* may throw if already started */ }
   }
 
   async function startRecording() {
-    if (isNative) return startNativeRecording();
-    let stream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch (err) {
-      setPermissionDenied(true);
-      return;
-    }
-    mediaStreamRef.current = stream;
-    startViz(stream);
+    setPermissionDenied(false);
 
-    // Record actual audio
-    const mime = pickMime();
-    chunksRef.current = [];
-    if (typeof MediaRecorder !== 'undefined') {
+    // Web only: capture the audio clip for playback (desktop browsers handle the
+    // mic + speech recognition together fine).
+    if (recordAudio) {
+      let stream;
       try {
-        const mr = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
-        mr.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunksRef.current.push(e.data); };
-        mediaRecorderRef.current = mr;
-        mr.start();
-      } catch { mediaRecorderRef.current = null; }
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (err) {
+        setPermissionDenied(true);
+        return;
+      }
+      mediaStreamRef.current = stream;
+      startViz(stream);
+      const mime = pickMime();
+      chunksRef.current = [];
+      if (typeof MediaRecorder !== 'undefined') {
+        try {
+          const mr = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+          mr.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunksRef.current.push(e.data); };
+          mediaRecorderRef.current = mr;
+          mr.start();
+        } catch { mediaRecorderRef.current = null; }
+      }
+    } else {
+      startFakeViz();
     }
 
     setPhase('recording');
@@ -169,41 +158,15 @@ export function VoiceScreen({ go, dark = false }) {
     stoppingRef.current = false;
     timerRef.current = setInterval(() => setSeconds(s => s + 1), 1000);
 
-    // Live transcription — only in real browsers (never the Android WebView,
-    // where the speech API exists but doesn't work).
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (useLive && SR) {
-      const rec = new SR();
-      rec.continuous = true;
-      rec.interimResults = true;
-      rec.lang = navigator.language || 'en-US';
-      recognitionRef.current = rec;
-      rec.onresult = (e) => {
-        let interim = '';
-        let final = savedTranscriptRef.current;
-        for (let i = e.resultIndex; i < e.results.length; i++) {
-          const txt = e.results[i][0].transcript;
-          if (e.results[i].isFinal) {
-            final += (final ? ' ' : '') + txt.trim();
-            savedTranscriptRef.current = final;
-            setTranscript(final);
-            setInterimText('');
-          } else { interim += txt; }
-        }
-        if (interim) setInterimText(interim);
-      };
-      rec.onerror = (e) => { if (e.error === 'not-allowed' || e.error === 'service-not-allowed') setPermissionDenied(true); };
-      rec.onend = () => { if (recognitionRef.current && !stoppingRef.current) { try { rec.start(); } catch {} } };
-      try { rec.start(); } catch { /* some browsers throw if already started */ }
-    }
+    if (hasSpeech) startSpeech();
   }
 
   async function stopAndSave() {
     if (phase !== 'recording') return;
-    if (isNative) return stopNativeAndSave();
     stoppingRef.current = true;
     setPhase('saving');
     clearInterval(timerRef.current);
+    clearInterval(vizTimerRef.current);
     cancelAnimationFrame(animFrameRef.current);
     setLevels(null);
 
@@ -212,7 +175,7 @@ export function VoiceScreen({ go, dark = false }) {
 
     if (recognitionRef.current) { try { recognitionRef.current.stop(); } catch {} recognitionRef.current = null; }
 
-    // Finalize audio blob
+    // Finalize audio blob (web only)
     let blob = null;
     const mr = mediaRecorderRef.current;
     if (mr && mr.state !== 'inactive') {
@@ -230,24 +193,14 @@ export function VoiceScreen({ go, dark = false }) {
     if (mediaStreamRef.current) { mediaStreamRef.current.getTracks().forEach(t => t.stop()); mediaStreamRef.current = null; }
     if (audioCtxRef.current) { try { audioCtxRef.current.close(); } catch {} audioCtxRef.current = null; }
 
-    // Nothing captured at all → just go back
     if (!finalText && !blob && dur === 0) { go('home'); return; }
 
-    // No live transcript (native WebView has no Web Speech API) → transcribe the
-    // recorded clip on-device. Audio is still saved regardless of the result.
-    let text = finalText;
-    if (!useLive && blob) {
-      setPhase('transcribing');
-      setTransStatus({ phase: 'loading', value: 0 });
-      text = await transcribeBlob(blob, (p, v) => setTransStatus({ phase: p, value: v ?? 0 }));
-    }
-
-    const note = addNote({ kind: 'voice', text, duration: dur, hasAudio: !!blob });
+    const note = addNote({ kind: 'voice', text: finalText, duration: dur, hasAudio: !!blob });
     if (blob) await saveAudio(note.id, blob);
     go('detail', { noteId: note.id });
   }
 
-  function discard() { if (phase === 'transcribing' || phase === 'saving') return; cleanup(); go('home'); }
+  function discard() { if (phase === 'saving') return; cleanup(); go('home'); }
 
   const fmt = (n) => `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`;
   const displayTranscript = transcript + (interimText ? (transcript ? ' ' : '') + interimText : '');
@@ -265,25 +218,7 @@ export function VoiceScreen({ go, dark = false }) {
             <div style={{ fontFamily: TYPE.ui, fontSize: 13.5, lineHeight: 1.55, color: dark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)' }}>
               Allow microphone access for this app in your device settings, then try again.
             </div>
-            <button onClick={() => go('home')} style={{ marginTop: 20, padding: '12px 24px', borderRadius: 9999, border: 'none', cursor: 'pointer', background: 'rgba(40,30,55,0.9)', color: '#fff', fontFamily: TYPE.ui, fontWeight: 600, fontSize: 14 }}>Back</button>
-          </div>
-        </GlassCard>
-      </div>
-    );
-  }
-
-  if (speechUnavailable) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', padding: '0 22px' }}>
-        <ScreenHeader dark={dark} back={() => go('home')} eyebrow="Speech unavailable" />
-        <GlassCard radius={20} padding={24} tint={dark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.7)'} style={{ marginTop: 24 }}>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 40, marginBottom: 16 }}>🗣️</div>
-            <div style={{ fontFamily: TYPE.ui, fontWeight: 600, fontSize: 16, color: dark ? '#fff' : '#1a1322', marginBottom: 8 }}>Speech recognition isn’t available</div>
-            <div style={{ fontFamily: TYPE.ui, fontSize: 13.5, lineHeight: 1.55, color: dark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)' }}>
-              This device has no speech service installed. Installing or enabling “Speech Recognition &amp; Synthesis” (Google) in your system settings usually fixes it.
-            </div>
-            <button onClick={() => go('home')} style={{ marginTop: 20, padding: '12px 24px', borderRadius: 9999, border: 'none', cursor: 'pointer', background: 'rgba(40,30,55,0.9)', color: '#fff', fontFamily: TYPE.ui, fontWeight: 600, fontSize: 14 }}>Back</button>
+            <button onClick={() => { setPermissionDenied(false); }} style={{ marginTop: 20, padding: '12px 24px', borderRadius: 9999, border: 'none', cursor: 'pointer', background: 'rgba(40,30,55,0.9)', color: '#fff', fontFamily: TYPE.ui, fontWeight: 600, fontSize: 14 }}>Try again</button>
           </div>
         </GlassCard>
       </div>
@@ -296,7 +231,7 @@ export function VoiceScreen({ go, dark = false }) {
         <ScreenHeader
           dark={dark}
           back={discard}
-          eyebrow={recording ? '● recording' : phase === 'transcribing' ? 'transcribing…' : phase === 'saving' ? 'saving…' : 'Tap the mic to start'}
+          eyebrow={recording ? '● recording' : phase === 'saving' ? 'saving…' : 'Tap the mic to start'}
         />
 
         <div style={{ position: 'relative', padding: '8px 0 0', textAlign: 'center' }}>
@@ -317,30 +252,13 @@ export function VoiceScreen({ go, dark = false }) {
             <Waveform color={dark ? '#fff' : '#2a1a40'} bars={38} active={recording} height={48} levels={recording ? levels : null} />
           </div>
           <div style={{ fontFamily: TYPE.serif, fontStyle: 'italic', fontSize: 15, lineHeight: 1.3, color: dark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.55)', padding: '0 32px', marginBottom: 16 }}>
-            {phase === 'transcribing'
-              ? (transStatus?.phase === 'loading'
-                  ? `Preparing the speech model… ${Math.round((transStatus.value || 0) * 100)}%`
-                  : 'Transcribing your note…')
-              : useLive
-                ? 'Speak naturally — your words appear below in real time.'
-                : 'Your audio is saved, then transcribed automatically when you stop.'}
+            {hasSpeech
+              ? 'Speak naturally — your words appear below in real time.'
+              : 'Recording your voice memo…'}
           </div>
-
-          {phase === 'transcribing' && (
-            <div style={{ padding: '0 24px 8px' }}>
-              <GlassCard radius={18} padding={18} tint={dark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.65)'}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'center' }}>
-                  <span style={{ width: 18, height: 18, borderRadius: '50%', border: `2.5px solid ${dark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.15)'}`, borderTopColor: accent, display: 'inline-block', animation: 'vSpin 0.8s linear infinite' }} />
-                  <span style={{ fontFamily: TYPE.ui, fontSize: 13.5, color: dark ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.6)' }}>
-                    {transStatus?.phase === 'loading' ? 'First time may take a moment to download the model.' : 'Converting your voice to text on-device.'}
-                  </span>
-                </div>
-              </GlassCard>
-            </div>
-          )}
         </div>
 
-        {useLive && (
+        {hasSpeech && (
           <div style={{ padding: '0 18px 24px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 7 }}>
               <div style={{ fontFamily: TYPE.mono, fontSize: 9.5, letterSpacing: 1.5, textTransform: 'uppercase', color: dark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.45)' }}>Live transcript</div>
@@ -350,7 +268,7 @@ export function VoiceScreen({ go, dark = false }) {
               <div style={{ fontFamily: TYPE.ui, fontSize: 15, lineHeight: 1.6, color: dark ? '#fff' : '#1a1322', minHeight: 72 }}>
                 {transcript && <span>{transcript} </span>}
                 {interimText && <span style={{ color: dark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.35)', fontStyle: 'italic' }}>{interimText}</span>}
-                {!displayTranscript && !recording && <span style={{ color: dark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.28)', fontStyle: 'italic' }}>Your words will appear here…</span>}
+                {!displayTranscript && <span style={{ color: dark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.28)', fontStyle: 'italic' }}>{recording ? 'Listening…' : 'Your words will appear here…'}</span>}
                 <span style={{ display: recording ? 'inline-block' : 'none', width: 2, height: 16, background: accent, marginLeft: 2, verticalAlign: 'middle', animation: 'caretBlink 0.9s steps(1) infinite' }} />
               </div>
             </GlassCard>
@@ -368,13 +286,13 @@ export function VoiceScreen({ go, dark = false }) {
 
         <button
           onClick={() => { navigator.vibrate?.(10); recording ? stopAndSave() : startRecording(); }}
-          disabled={phase === 'saving' || phase === 'transcribing'}
+          disabled={phase === 'saving'}
           style={{
             width: 80, height: 80, borderRadius: 40, border: 'none', cursor: 'pointer',
             background: recording ? 'radial-gradient(circle at 30% 30%, #ff8a6b, #d24a3f)' : 'radial-gradient(circle at 30% 30%, #b490f0, #6644b8)',
             boxShadow: recording ? '0 8px 26px rgba(210,74,63,0.45), inset 0 2px 0 rgba(255,255,255,0.25)' : '0 8px 26px rgba(102,68,184,0.45), inset 0 2px 0 rgba(255,255,255,0.3)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            opacity: (phase === 'saving' || phase === 'transcribing') ? 0.6 : 1, transition: 'transform 0.1s',
+            opacity: phase === 'saving' ? 0.6 : 1, transition: 'transform 0.1s',
           }}
           onTouchStart={e => e.currentTarget.style.transform = 'scale(0.94)'}
           onTouchEnd={e => e.currentTarget.style.transform = 'scale(1)'}
@@ -394,7 +312,6 @@ export function VoiceScreen({ go, dark = false }) {
       <style>{`
         @keyframes vBreathe { from{transform:translateX(-50%) scale(0.88);opacity:0.6} to{transform:translateX(-50%) scale(1.1);opacity:1} }
         @keyframes caretBlink { 50%{opacity:0} }
-        @keyframes vSpin { to { transform: rotate(360deg); } }
       `}</style>
     </div>
   );
