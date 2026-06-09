@@ -26,8 +26,20 @@ export function VoiceScreen({ go, dark = false }) {
   const [interimText, setInterimText] = React.useState('');
   const [levels, setLevels]           = React.useState(null);
   const [permissionDenied, setPermissionDenied] = React.useState(false);
-  const [hasSpeechAPI]                = React.useState(() =>
-    typeof window !== 'undefined' && !!(window.SpeechRecognition || window.webkitSpeechRecognition));
+  // Live (word-by-word) transcription via the Web Speech API only works in real
+  // browsers (desktop Chrome). The Android WebView often *exposes*
+  // webkitSpeechRecognition but it doesn't actually function — so on the native
+  // app we ignore it and always transcribe the recorded clip on-device (Whisper)
+  // after the user stops.
+  const [useLive] = React.useState(() => {
+    if (typeof window === 'undefined') return false;
+    const cap = window.Capacitor;
+    const isNative = !!(cap && (typeof cap.isNativePlatform === 'function'
+      ? cap.isNativePlatform()
+      : (cap.getPlatform && cap.getPlatform() !== 'web')));
+    const hasAPI = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+    return hasAPI && !isNative;
+  });
 
   const recognitionRef     = React.useRef(null);
   const mediaStreamRef     = React.useRef(null);
@@ -104,9 +116,10 @@ export function VoiceScreen({ go, dark = false }) {
     stoppingRef.current = false;
     timerRef.current = setInterval(() => setSeconds(s => s + 1), 1000);
 
-    // Live transcription where supported
+    // Live transcription — only in real browsers (never the Android WebView,
+    // where the speech API exists but doesn't work).
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SR) {
+    if (useLive && SR) {
       const rec = new SR();
       rec.continuous = true;
       rec.interimResults = true;
@@ -169,7 +182,7 @@ export function VoiceScreen({ go, dark = false }) {
     // No live transcript (native WebView has no Web Speech API) → transcribe the
     // recorded clip on-device. Audio is still saved regardless of the result.
     let text = finalText;
-    if (!hasSpeechAPI && blob) {
+    if (!useLive && blob) {
       setPhase('transcribing');
       setTransStatus({ phase: 'loading', value: 0 });
       text = await transcribeBlob(blob, (p, v) => setTransStatus({ phase: p, value: v ?? 0 }));
@@ -236,7 +249,7 @@ export function VoiceScreen({ go, dark = false }) {
               ? (transStatus?.phase === 'loading'
                   ? `Preparing the speech model… ${Math.round((transStatus.value || 0) * 100)}%`
                   : 'Transcribing your note…')
-              : hasSpeechAPI
+              : useLive
                 ? 'Speak naturally — your words appear below in real time.'
                 : 'Your audio is saved, then transcribed automatically when you stop.'}
           </div>
@@ -255,7 +268,7 @@ export function VoiceScreen({ go, dark = false }) {
           )}
         </div>
 
-        {hasSpeechAPI && (
+        {useLive && (
           <div style={{ padding: '0 18px 24px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 7 }}>
               <div style={{ fontFamily: TYPE.mono, fontSize: 9.5, letterSpacing: 1.5, textTransform: 'uppercase', color: dark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.45)' }}>Live transcript</div>

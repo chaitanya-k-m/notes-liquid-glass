@@ -1,5 +1,5 @@
 import React from 'react';
-import { TYPE, GlassCard, PALETTES } from '../design-system.jsx';
+import { TYPE, GlassCard, PALETTES, APP_VERSION } from '../design-system.jsx';
 import { ScreenHeader } from '../components/ScreensCommon.jsx';
 import { useTheme, PRESETS } from '../store/theme.jsx';
 import { useNotes } from '../store/notes.jsx';
@@ -88,7 +88,7 @@ export function SettingsScreen({ go, pro }) {
           {/* About */}
           <div style={{ textAlign: 'center', paddingTop: 8 }}>
             <div style={{ fontFamily: TYPE.mono, fontSize: 9.5, letterSpacing: 0.8, color: subInk }}>
-              {notes.length} note{notes.length !== 1 ? 's' : ''} · stored on this device
+              {notes.length} note{notes.length !== 1 ? 's' : ''} · stored on this device · v{APP_VERSION}
             </div>
             <div style={{ fontFamily: TYPE.serif, fontStyle: 'italic', fontSize: 15, color: subInk, marginTop: 8 }}>think out loud, find anything.</div>
           </div>
