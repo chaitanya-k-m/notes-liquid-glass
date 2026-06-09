@@ -1,5 +1,6 @@
 import React from 'react';
 import { PALETTES } from '../design-system.jsx';
+import { applyStatusBar } from '../native.js';
 
 // Theme presets matching the original design language.
 export const PRESETS = {
@@ -33,6 +34,8 @@ export function ThemeProvider({ children }) {
     // keep the browser/status bar UI in sync with the active palette
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute('content', stops[0]);
+    // native Android status bar (no-op on web)
+    applyStatusBar({ dark: !!theme.dark, color: stops[0] });
   }, [theme, stops]);
 
   const setPreset = (name) => { const p = PRESETS[name]; if (p) setTheme({ preset: name, palette: p.palette, accent: p.accent, dark: p.dark }); };

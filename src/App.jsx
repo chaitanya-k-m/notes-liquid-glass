@@ -9,6 +9,8 @@ import { SearchScreen }  from './screens/SearchScreen.jsx';
 import { SettingsScreen } from './screens/SettingsScreen.jsx';
 import { PaywallScreen } from './screens/PaywallScreen.jsx';
 import { OnboardingScreen } from './screens/OnboardingScreen.jsx';
+import { TYPE } from './design-system.jsx';
+import { hideSplash, registerBackButton, exitApp } from './native.js';
 
 const SCREENS = {
   home: HomeScreen, detail: DetailScreen, voice: VoiceScreen,
@@ -41,12 +43,16 @@ function Shell() {
   const [dir, setDir]         = React.useState('forward');
   const [transKey, setTransKey] = React.useState(0);
   const [sheet, setSheet]     = React.useState(false);
+  const [exitHint, setExitHint] = React.useState(false);
 
   const go = React.useCallback((s, p = null) => {
     setDir(s === 'home' ? 'back' : 'forward');
     setScreen(s); setPayload(p); setTransKey(k => k + 1); setSheet(false);
   }, []);
   const openNew = React.useCallback(() => setSheet(true), []);
+
+  // Hide the native splash once the app has rendered.
+  React.useEffect(() => { hideSplash(); }, []);
 
   // Handle PWA manifest shortcuts (?action=voice|write)
   React.useEffect(() => {
@@ -56,6 +62,26 @@ function Shell() {
       else if (action === 'write') go('detail', { draft: true, kind: 'text' });
       if (action) window.history.replaceState({}, '', window.location.pathname);
     } catch {}
+  }, [go]);
+
+  // Android hardware/gesture back button → navigate within the app instead of
+  // exiting. Refs keep the once-registered handler reading the latest state.
+  const stateRef = React.useRef({});
+  stateRef.current = { screen, sheet, onboarded };
+  const lastBackRef = React.useRef(0);
+  React.useEffect(() => {
+    const maybeExit = () => {
+      const now = Date.now();
+      if (now - lastBackRef.current < 2000) { exitApp(); }
+      else { lastBackRef.current = now; setExitHint(true); setTimeout(() => setExitHint(false), 2000); }
+    };
+    return registerBackButton(() => {
+      const s = stateRef.current;
+      if (s.sheet) { setSheet(false); return; }
+      if (!s.onboarded) { maybeExit(); return; }
+      if (s.screen !== 'home') { go('home'); return; }
+      maybeExit();
+    });
   }, [go]);
 
   const ScreenComp = SCREENS[screen] || HomeScreen;
@@ -88,6 +114,17 @@ function Shell() {
       {sheet && <NewSheet dark={dark} onClose={() => setSheet(false)} go={go} />}
 
       {!onboarded && <OnboardingScreen dark={dark} accent={accent} gradient={gradient} onDone={finishOnboarding} />}
+
+      {exitHint && (
+        <div style={{
+          position: 'absolute', left: '50%', bottom: 'max(28px, env(safe-area-inset-bottom, 28px))',
+          transform: 'translateX(-50%)', zIndex: 60, pointerEvents: 'none',
+          padding: '10px 18px', borderRadius: 9999,
+          background: 'rgba(20,15,30,0.85)', color: '#fff',
+          fontFamily: TYPE.ui, fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap',
+          boxShadow: '0 6px 20px rgba(0,0,0,0.3)',
+        }}>Press back again to exit</div>
+      )}
     </div>
   );
 }
