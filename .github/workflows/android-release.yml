@@ -69,6 +69,15 @@ jobs:
           chmod +x gradlew
           ./gradlew bundleRelease --no-daemon --stacktrace
 
+      - name: Stamp version into filename
+        id: ver
+        run: |
+          VC=$(grep -m1 'versionCode' android/app/build.gradle | grep -oE '[0-9]+')
+          VN=$(grep -m1 'versionName' android/app/build.gradle | grep -oE '"[^"]+"' | tr -d '"')
+          cp android/app/build/outputs/bundle/release/app-release.aab "notes-v${VN}-code${VC}.aab"
+          echo "file=notes-v${VN}-code${VC}.aab" >> "$GITHUB_OUTPUT"
+          echo "name=notes-v${VN}-code${VC}" >> "$GITHUB_OUTPUT"
+
       - name: Clean up signing material
         if: always()
         run: rm -f android/app/upload.keystore android/keystore.properties
@@ -76,6 +85,6 @@ jobs:
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-aab
-          path: android/app/build/outputs/bundle/release/app-release.aab
+          name: ${{ steps.ver.outputs.name }}
+          path: ${{ steps.ver.outputs.file }}
           if-no-files-found: error
