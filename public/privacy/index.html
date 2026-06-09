@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy Policy — Notes</title>
+  <meta name="robots" content="index, follow" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root { --ink:#2a2533; --muted:#6b6478; --line:rgba(0,0,0,0.08); --accent:#7a5cd0; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: 'Geist', system-ui, -apple-system, sans-serif;
+      color: var(--ink);
+      background: linear-gradient(160deg, #f5ead9 0%, #efe3ef 45%, #e6ecff 100%);
+      background-attachment: fixed;
+      line-height: 1.6;
+      min-height: 100vh;
+      padding: 48px 20px 80px;
+    }
+    .wrap {
+      max-width: 680px; margin: 0 auto;
+      background: rgba(255,255,255,0.72);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.6);
+      border-radius: 24px;
+      padding: 40px 36px;
+      box-shadow: 0 20px 60px rgba(80,60,120,0.12);
+    }
+    .eyebrow {
+      font-family: 'Geist Mono', monospace;
+      font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--accent); margin: 0 0 10px;
+    }
+    h1 {
+      font-family: 'Instrument Serif', Georgia, serif;
+      font-weight: 400; font-size: 44px; line-height: 1.05;
+      margin: 0 0 6px; letter-spacing: -0.01em;
+    }
+    h1 em { font-style: italic; }
+    .updated { color: var(--muted); font-size: 14px; margin: 0 0 32px; }
+    h2 {
+      font-family: 'Instrument Serif', Georgia, serif;
+      font-weight: 400; font-size: 26px; margin: 34px 0 10px;
+    }
+    p, li { color: #3b3547; font-size: 16px; }
+    a { color: var(--accent); text-decoration: none; border-bottom: 1px solid rgba(122,92,208,0.35); }
+    ul { padding-left: 20px; }
+    li { margin-bottom: 8px; }
+    .callout {
+      margin: 22px 0; padding: 18px 20px;
+      background: rgba(122,92,208,0.08);
+      border: 1px solid rgba(122,92,208,0.18);
+      border-radius: 16px; font-size: 15px;
+    }
+    .callout strong { color: var(--ink); }
+    hr { border: none; border-top: 1px solid var(--line); margin: 36px 0; }
+    footer { color: var(--muted); font-size: 13px; text-align: center; margin-top: 28px; }
+    footer a { border: none; }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <p class="eyebrow">Notes</p>
+    <h1>Privacy <em>Policy</em></h1>
+    <p class="updated">Last updated: 9 June 2026</p>
+
+    <p>
+      Notes is a personal note-taking app built around a simple promise:
+      <strong>your content stays on your device.</strong> This policy explains
+      what the app does and does not do with your information.
+    </p>
+
+    <div class="callout">
+      <strong>The short version:</strong> The app has no user accounts and no
+      backend server that stores your data. Your notes, voice memos, photos,
+      files and checklists are saved <strong>locally on your device</strong> and
+      are never uploaded to us or anyone else.
+    </div>
+
+    <h2>Information we collect</h2>
+    <p>
+      <strong>None.</strong> We do not collect, transmit, sell, or share any
+      personal information. Specifically:
+    </p>
+    <ul>
+      <li>We have no user accounts, logins, or sign-up.</li>
+      <li>We do not use analytics, advertising, or tracking SDKs.</li>
+      <li>We do not have a server that receives or stores your notes.</li>
+    </ul>
+
+    <h2>Where your data is stored</h2>
+    <p>
+      Everything you create in the app — text notes, voice recordings,
+      transcripts, photos, file attachments, checklists, pins, and theme
+      preferences — is stored entirely on your device using your browser's
+      local storage (localStorage and IndexedDB). It remains accessible only
+      on that device. If you uninstall the app or clear its storage, that data
+      is permanently deleted.
+    </p>
+
+    <h2>Network connections</h2>
+    <p>
+      The app makes a small number of outbound requests to function. These
+      <em>download</em> resources to your device; they do not send your notes
+      anywhere:
+    </p>
+    <ul>
+      <li><strong>App delivery (Vercel):</strong> loading the app itself.</li>
+      <li><strong>Fonts (Google Fonts):</strong> loading the typefaces used in the interface.</li>
+      <li><strong>Daily quote (ZenQuotes):</strong> fetching one inspirational quote per day. No personal data is sent.</li>
+      <li><strong>On-device AI search models (Hugging Face CDN):</strong> downloading the search models, which then run entirely on your device. Your search queries and notes are processed locally and are never transmitted.</li>
+    </ul>
+    <p>
+      As with any internet request, these services may receive standard
+      technical information such as your device's IP address, used only to
+      deliver the requested content. We do not control these third parties;
+      their handling of such data is governed by their own privacy policies.
+    </p>
+
+    <h2>Device permissions</h2>
+    <p>
+      The app may request access to your <strong>microphone</strong> (to record
+      voice memos) and your <strong>camera or photos</strong> (to attach
+      images). These are used only when you choose to use those features, and
+      the resulting recordings and images are stored only on your device.
+    </p>
+
+    <h2>Children's privacy</h2>
+    <p>
+      The app is not directed at children and does not knowingly collect any
+      information from anyone, including children.
+    </p>
+
+    <h2>Changes to this policy</h2>
+    <p>
+      If this policy changes, the updated version will be posted on this page
+      with a new "last updated" date.
+    </p>
+
+    <h2>Contact</h2>
+    <p>
+      If you have any questions about this privacy policy, contact us at
+      <a href="mailto:chaitanyamupparaju@gmail.com">chaitanyamupparaju@gmail.com</a>.
+    </p>
+
+    <hr />
+    <footer>
+      <a href="/">&larr; Back to Notes</a>
+    </footer>
+  </main>
+</body>
+</html>
