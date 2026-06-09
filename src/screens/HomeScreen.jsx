@@ -20,7 +20,8 @@ function tintFor(kind, dark) {
 
 export function HomeScreen({ go, openNew }) {
   const { notes, updateNote } = useNotes();
-  const { dark, accent } = useTheme();
+  const { dark, accent, palette } = useTheme();
+  const plain = palette === 'paper' || palette === 'ink';
   const [tab, setTab] = React.useState('Pinned');
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
   const togglePin = (n) => updateNote(n.id, { pinned: !n.pinned });
@@ -49,7 +50,7 @@ export function HomeScreen({ go, openNew }) {
         </div>
 
         <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {tab === 'Pinned' && <QuoteHero dark={dark} ink={ink} subInk={subInk} />}
+          {tab === 'Pinned' && <QuoteHero dark={dark} ink={ink} subInk={subInk} plain={plain} />}
 
           {filtered.length === 0
             ? <EmptyState dark={dark} tab={tab} openNew={openNew} go={go} ink={ink} subInk={subInk} />
@@ -76,7 +77,7 @@ export function HomeScreen({ go, openNew }) {
 }
 
 // ── Today's Thought — quote of the day ────────────────────────────────────────
-function QuoteHero({ dark, ink, subInk }) {
+function QuoteHero({ dark, ink, subInk, plain = false }) {
   const [q, setQ] = React.useState(() => localDaily());
   React.useEffect(() => { let alive = true; fetchDaily().then(r => { if (alive && r) setQ(r); }); return () => { alive = false; }; }, []);
   const { text: quote, author } = q;
@@ -85,9 +86,13 @@ function QuoteHero({ dark, ink, subInk }) {
   return (
     <div style={{
       position: 'relative', borderRadius: 28, overflow: 'hidden', padding: 22,
-      background: dark
-        ? 'linear-gradient(150deg, rgba(120,90,170,0.45), rgba(80,70,140,0.4))'
-        : 'linear-gradient(150deg, rgba(255,205,180,0.75), rgba(247,200,212,0.7) 55%, rgba(220,203,242,0.7))',
+      background: plain
+        ? (dark
+            ? 'linear-gradient(150deg, rgba(255,255,255,0.09), rgba(255,255,255,0.05))'
+            : 'linear-gradient(150deg, rgba(20,20,30,0.06), rgba(20,20,30,0.03))')
+        : dark
+          ? 'linear-gradient(150deg, rgba(120,90,170,0.45), rgba(80,70,140,0.4))'
+          : 'linear-gradient(150deg, rgba(255,205,180,0.75), rgba(247,200,212,0.7) 55%, rgba(220,203,242,0.7))',
       boxShadow: dark ? '0 10px 28px rgba(0,0,0,0.3)' : '0 1px 0 rgba(255,255,255,0.6) inset, 0 10px 28px rgba(120,90,140,0.18)',
       minHeight: 188,
     }}>

@@ -15,6 +15,8 @@ export const PALETTES = {
   midnight: ['#1a1530', '#2a1f4a', '#3a2960', '#1f3050'],
   sand:     ['#f4e6cd', '#ecd2b1', '#d4b594', '#b89175'],
   ocean:    ['#dbeaf2', '#bcd6e3', '#9cb9d0', '#7e9bbc'],
+  paper:    ['#ffffff', '#f6f6f8', '#efeff2', '#e9e9ed'],
+  ink:      ['#0e0e12', '#15151b', '#1b1b22', '#101015'],
 };
 
 export function gradientCSS(stops, angle = 165) {

@@ -32,9 +32,10 @@ function useOnboarded() {
 }
 
 function Shell() {
-  const { gradient, dark, accent } = useTheme();
+  const { gradient, dark, accent, palette } = useTheme();
   const [pro, setPro] = usePro();
   const [onboarded, finishOnboarding] = useOnboarded();
+  const plain = palette === 'paper' || palette === 'ink';
   const [screen, setScreen]   = React.useState('home');
   const [payload, setPayload] = React.useState(null);
   const [dir, setDir]         = React.useState('forward');
@@ -70,9 +71,11 @@ function Shell() {
       paddingRight:'env(safe-area-inset-right, 0px)',
       overflow: 'hidden',
     }}>
-      {/* Decorative, non-interactive */}
-      <div aria-hidden style={{ position: 'absolute', top: '-10%', right: '-15%', width: 300, height: 300, borderRadius: '50%', background: dark ? 'radial-gradient(circle, rgba(150,110,210,0.4), transparent 70%)' : 'radial-gradient(circle, rgba(255,180,140,0.4), transparent 70%)', filter: 'blur(45px)', pointerEvents: 'none', zIndex: 0 }} />
-      <div aria-hidden style={{ position: 'absolute', bottom: '-8%', left: '-20%', width: 380, height: 380, borderRadius: '50%', background: dark ? 'radial-gradient(circle, rgba(90,120,200,0.35), transparent 70%)' : 'radial-gradient(circle, rgba(180,200,255,0.4), transparent 70%)', filter: 'blur(55px)', pointerEvents: 'none', zIndex: 0 }} />
+      {/* Decorative, non-interactive — suppressed on the plain (paper/ink) palettes */}
+      {!plain && <>
+        <div aria-hidden style={{ position: 'absolute', top: '-10%', right: '-15%', width: 300, height: 300, borderRadius: '50%', background: dark ? 'radial-gradient(circle, rgba(150,110,210,0.4), transparent 70%)' : 'radial-gradient(circle, rgba(255,180,140,0.4), transparent 70%)', filter: 'blur(45px)', pointerEvents: 'none', zIndex: 0 }} />
+        <div aria-hidden style={{ position: 'absolute', bottom: '-8%', left: '-20%', width: 380, height: 380, borderRadius: '50%', background: dark ? 'radial-gradient(circle, rgba(90,120,200,0.35), transparent 70%)' : 'radial-gradient(circle, rgba(180,200,255,0.4), transparent 70%)', filter: 'blur(55px)', pointerEvents: 'none', zIndex: 0 }} />
+      </>}
 
       <div
         key={transKey}
