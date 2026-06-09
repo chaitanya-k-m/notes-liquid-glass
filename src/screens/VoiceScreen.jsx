@@ -47,6 +47,7 @@ export function VoiceScreen({ go, dark = false }) {
   const timerRef           = React.useRef(null);
   const vizTimerRef        = React.useRef(null);
   const savedTranscriptRef = React.useRef('');
+  const committedRef       = React.useRef(''); // finalized text across recognition sessions
   const secondsRef         = React.useRef(0);
   const stoppingRef        = React.useRef(false);
 
@@ -96,28 +97,42 @@ export function VoiceScreen({ go, dark = false }) {
   function startSpeech() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return;
+    const norm = (s) => s.replace(/\s+/g, ' ').trim();
+    // continuous=false (single utterance per session) avoids the WebView's
+    // duplicate-final bug; we restart on end to keep dictating.
     const rec = new SR();
-    rec.continuous = true;
+    rec.continuous = false;
     rec.interimResults = true;
     rec.lang = navigator.language || 'en-US';
     recognitionRef.current = rec;
+    let sessionFinal = '';
     rec.onresult = (e) => {
+      // Recompute the whole session from index 0 every event — never append
+      // deltas (the WebView re-delivers the same finals repeatedly).
       let interim = '';
-      let final = savedTranscriptRef.current;
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const txt = e.results[i][0].transcript;
-        if (e.results[i].isFinal) {
-          final += (final ? ' ' : '') + txt.trim();
-          savedTranscriptRef.current = final;
-          setTranscript(final);
-          setInterimText('');
-        } else { interim += txt; }
+      sessionFinal = '';
+      for (let i = 0; i < e.results.length; i++) {
+        const r = e.results[i];
+        if (r.isFinal) sessionFinal += r[0].transcript;
+        else interim += r[0].transcript;
       }
-      if (interim) setInterimText(interim);
+      const full = norm(committedRef.current + ' ' + sessionFinal);
+      savedTranscriptRef.current = full;
+      setTranscript(full);
+      setInterimText(interim.trim());
     };
     rec.onerror = (e) => { if (e.error === 'not-allowed' || e.error === 'service-not-allowed') setPermissionDenied(true); };
-    // Android's recognizer auto-stops on silence — restart for continuous dictation.
-    rec.onend = () => { if (recognitionRef.current && !stoppingRef.current) { try { rec.start(); } catch {} } };
+    rec.onend = () => {
+      // Commit this utterance, then restart for continuous dictation.
+      if (sessionFinal) {
+        committedRef.current = norm(committedRef.current + ' ' + sessionFinal);
+        sessionFinal = '';
+        savedTranscriptRef.current = committedRef.current;
+        setTranscript(committedRef.current);
+        setInterimText('');
+      }
+      if (recognitionRef.current && !stoppingRef.current) { try { rec.start(); } catch {} }
+    };
     try { rec.start(); } catch { /* may throw if already started */ }
   }
 
@@ -155,6 +170,7 @@ export function VoiceScreen({ go, dark = false }) {
     setTranscript('');
     setInterimText('');
     savedTranscriptRef.current = '';
+    committedRef.current = '';
     stoppingRef.current = false;
     timerRef.current = setInterval(() => setSeconds(s => s + 1), 1000);
 
