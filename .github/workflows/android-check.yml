@@ -20,6 +20,10 @@ jobs:
           node-version: '20'
           cache: npm
       - uses: android-actions/setup-android@v3
+      - name: Install Android SDK packages
+        run: |
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" "build-tools;35.0.0"
       - run: npm ci
       - run: npm run build
       - run: npx cap sync android
@@ -27,8 +31,17 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          set +e
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee /tmp/gradle.log
+          code=${PIPESTATUS[0]}
+          if [ $code -ne 0 ]; then
+            msg=$(grep -nE "FAILURE:|What went wrong|Caused by|error:|not been accepted|not found|Could not|No such|Unsupported|requires|^> " /tmp/gradle.log | tail -60 | sed 's/%/%25/g; s/\r//g')
+            msg="${msg//$'\n'/%0A}"
+            echo "::error::GRADLE FAILED%0A${msg}"
+          fi
+          exit $code
       - uses: actions/upload-artifact@v4
+        if: success()
         with:
           name: app-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
