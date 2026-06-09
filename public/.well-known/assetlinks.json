@@ -3,8 +3,10 @@
     "relation": ["delegate_permission/common.handle_all_urls"],
     "target": {
       "namespace": "android_app",
-      "package_name": "REPLACE_WITH_YOUR_PACKAGE_NAME",
-      "sha256_cert_fingerprints": ["REPLACE_WITH_SHA256_FROM_PWABUILDER_OR_PLAY_CONSOLE"]
+      "package_name": "app.vercel.notes_liquid_glass.twa",
+      "sha256_cert_fingerprints": [
+        "FE:6F:3A:33:7A:62:F0:94:D8:83:82:15:FC:88:D3:A6:4F:04:29:04:17:93:CF:77:2B:B1:29:69:06:2A:1E:C6"
+      ]
     }
   }
 ]
