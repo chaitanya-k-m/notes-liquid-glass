@@ -1,7 +1,7 @@
 import React from 'react';
 
 // App version — keep in sync with android/app/build.gradle versionName.
-export const APP_VERSION = '1.0.8';
+export const APP_VERSION = '1.0.9';
 
 export const TYPE = {
   pixel:   `"VT323", "Courier New", monospace`,
