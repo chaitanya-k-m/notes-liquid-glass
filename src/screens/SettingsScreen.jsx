@@ -3,6 +3,7 @@ import { TYPE, GlassCard, PALETTES, APP_VERSION } from '../design-system.jsx';
 import { ScreenHeader } from '../components/ScreensCommon.jsx';
 import { useTheme, PRESETS } from '../store/theme.jsx';
 import { useNotes } from '../store/notes.jsx';
+import { exportBackup, importBackup } from '../store/backup.js';
 
 export function SettingsScreen({ go, pro }) {
   const { dark, preset, palette, accent, setPreset, setPalette, setAccent, setDark } = useTheme();
@@ -11,6 +12,39 @@ export function SettingsScreen({ go, pro }) {
   const subInk = dark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)';
 
   const accents = ['#a48ce6', '#e08aa0', '#5b9be6', '#6ec4a0', '#e6a36b', '#fff36a'];
+
+  const fileRef = React.useRef(null);
+  const [busy, setBusy] = React.useState('');     // 'export' | 'import'
+  const [status, setStatus] = React.useState(null); // { ok, msg }
+
+  async function onExport() {
+    if (busy) return;
+    setBusy('export'); setStatus(null);
+    try {
+      const n = await exportBackup(notes);
+      setStatus({ ok: true, msg: `Backup ready · ${n} note${n !== 1 ? 's' : ''}` });
+    } catch (e) {
+      setStatus({ ok: false, msg: e?.message || 'Export failed.' });
+    } finally { setBusy(''); }
+  }
+
+  function onPickImport() { if (!busy) fileRef.current?.click(); }
+
+  async function onImportFile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setBusy('import'); setStatus(null);
+    try {
+      const text = await file.text();
+      const { added, total } = await importBackup(text);
+      setStatus({ ok: true, msg: `Restored ${total} note${total !== 1 ? 's' : ''} (${added} new). Reloading…` });
+      setTimeout(() => { try { window.location.reload(); } catch {} }, 1200);
+    } catch (err) {
+      setStatus({ ok: false, msg: err?.message || 'Import failed.' });
+      setBusy('');
+    }
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
@@ -85,6 +119,25 @@ export function SettingsScreen({ go, pro }) {
             </div>
           </GlassCard>
 
+          {/* Backup & restore */}
+          <Section label="Backup & restore" subInk={subInk}>
+            <GlassCard radius={18} padding={16} tint={dark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.6)'}>
+              <div style={{ fontFamily: TYPE.ui, fontSize: 12.5, lineHeight: 1.5, color: subInk, marginBottom: 14 }}>
+                Save all your notes — text, checklists, photos, and audio — to a file you can keep or move to a new phone. Importing merges by note, so re-importing won’t duplicate.
+              </div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <BackupBtn dark={dark} accent={accent} onClick={onExport} busy={busy === 'export'} label="Back up" filled />
+                <BackupBtn dark={dark} accent={accent} onClick={onPickImport} busy={busy === 'import'} label="Restore" />
+              </div>
+              {status && (
+                <div style={{ marginTop: 12, fontFamily: TYPE.ui, fontSize: 12.5, color: status.ok ? (dark ? '#7fe0b0' : '#1f6b4f') : '#d24a3f' }}>
+                  {status.msg}
+                </div>
+              )}
+              <input ref={fileRef} type="file" accept="application/json,.json" onChange={onImportFile} style={{ display: 'none' }} />
+            </GlassCard>
+          </Section>
+
           {/* About */}
           <div style={{ textAlign: 'center', paddingTop: 8 }}>
             <div style={{ fontFamily: TYPE.mono, fontSize: 9.5, letterSpacing: 0.8, color: subInk }}>
@@ -95,6 +148,19 @@ export function SettingsScreen({ go, pro }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function BackupBtn({ label, onClick, busy, filled, dark, accent }) {
+  return (
+    <button onClick={onClick} disabled={busy} style={{
+      flex: 1, padding: '12px', borderRadius: 13, cursor: busy ? 'default' : 'pointer',
+      border: filled ? 'none' : `1.5px solid ${dark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.14)'}`,
+      background: filled ? accent : 'transparent',
+      color: filled ? '#fff' : (dark ? '#fff' : '#1a1322'),
+      fontFamily: TYPE.ui, fontWeight: 600, fontSize: 14, opacity: busy ? 0.6 : 1,
+      boxShadow: filled ? `0 4px 12px ${accent}55` : 'none',
+    }}>{busy ? 'Working…' : label}</button>
   );
 }
 

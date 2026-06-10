@@ -62,3 +62,21 @@ export async function deleteBlob(key) {
 export const saveAudio = saveBlob;
 export const loadAudio = loadBlob;
 export const deleteAudio = deleteBlob;
+
+// Every stored blob with its key — used for full backup export.
+export async function allBlobs() {
+  try {
+    const db = await getDB();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, 'readonly');
+      const store = tx.objectStore(STORE);
+      const keysReq = store.getAllKeys();
+      const valsReq = store.getAll();
+      let keys = null, vals = null;
+      const finish = () => { if (keys && vals) resolve(keys.map((k, i) => ({ key: k, blob: vals[i] }))); };
+      keysReq.onsuccess = () => { keys = keysReq.result; finish(); };
+      valsReq.onsuccess = () => { vals = valsReq.result; finish(); };
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch { return []; }
+}
